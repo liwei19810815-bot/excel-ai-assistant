@@ -68,6 +68,10 @@ export function sourceFingerprint(root = '.') {
     'scripts',
     'manifest.xml',
     'package.json',
+    // 【锁文件决定依赖版本，依赖变了产物就变了】。
+    // 只看 package.json 是不够的：^1.2.0 这种范围下，
+    // 锁文件一变实际装的版本就变，而 package.json 一个字没动。
+    'package-lock.json',
     'tsconfig.json',
     'vite.config.ts',
     'index.html',
