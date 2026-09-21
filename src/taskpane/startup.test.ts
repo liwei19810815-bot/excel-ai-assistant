@@ -1,16 +1,22 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { provision, applyRibbonVisibility } from '../store/provisioning';
+import { runStartup } from './startup';
 import { useSettings } from '../store/settings';
 
 /**
  * 启动路径的测试。
  *
  * main.tsx 里那段启动逻辑是：
- *     mount()  →  provision()  →  applyRibbonVisibility(结果)
+ *     mount()  →  runStartup()
+ * 而 runStartup() = provision() → applyRibbonVisibility(结果)
  *
- * 挂载那一步要 DOM，这里不碰；但【后两步的接线和异常路径】必须有覆盖——
- * 它们决定了"服务端把功能关了，客户端到底会不会真的停用"。
- * 评审指出这条路径此前完全没有测试。
+ * 挂载那一步要 DOM，这里不碰；但【链路本身】必须有覆盖——
+ * 它决定了"服务端把功能关了，客户端到底会不会真的停用"。
+ *
+ * 【第一版测试是分别调这两个函数的】，那只能证明两个函数各自能用，
+ * 证明不了 main.tsx 真的把它们串起来了：链路被删、顺序写反、
+ * 传错字段都不会变红（评审指出）。所以启动逻辑被抽成 runStartup()，
+ * 下面直接断言这条链路。
  */
 
 const ORIGIN = 'https://gw.example.com';
@@ -106,5 +112,45 @@ describe('启动路径', () => {
         .tabs[0].groups[0].controls[0].enabled,
     );
     expect(enabled).toEqual([true, false, false]);
+  });
+});
+
+//============================================================================
+// 启动链路本身
+//
+// 上面那些是各个零件；这里断言的是【它们真的被串起来了】。
+//============================================================================
+describe('runStartup 链路', () => {
+  it('问完配置之后，真的按结果去更新了功能区按钮', async () => {
+    const seen: boolean[] = [];
+    (globalThis as { Office?: unknown }).Office = {
+      ribbon: {
+        requestUpdate: async (arg: unknown) => {
+          seen.push(
+            (arg as { tabs: { groups: { controls: { enabled: boolean }[] }[] }[] })
+              .tabs[0].groups[0].controls[0].enabled,
+          );
+        },
+      },
+      context: { requirements: { isSetSupported: () => true } },
+    };
+
+    // 没有 location 时 provision 读不到身份 → byok + visibility 1
+    const r = await runStartup();
+
+    expect(r.mode).toBe('byok');
+    expect(r.visibility).toBe(1);
+    // 【关键】：链路走通了，按钮被更新过，且传的是 visibility 对应的值
+    expect(r.ribbonUpdated).toBe(true);
+    expect(seen).toEqual([true]);
+    expect(useSettings.getState().provision.status).toBe('ready');
+  });
+
+  it('Office 不可用时链路照样走完，只是按钮没更新', async () => {
+    delete (globalThis as { Office?: unknown }).Office;
+    const r = await runStartup();
+    expect(r.ribbonUpdated).toBe(false);
+    // 【不能因为按钮更新不了就不放行】——那会让老版本 Office 上的人用不了
+    expect(useSettings.getState().provision.status).toBe('ready');
   });
 });

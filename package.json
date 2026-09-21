@@ -8,7 +8,7 @@
     "dev": "vite",
     "start": "office-addin-debugging start manifest.xml desktop",
     "stop": "office-addin-debugging stop manifest.xml",
-    "build": "node scripts/gen-version.mjs && tsc --noEmit && vite build",
+    "build": "node scripts/gen-version.mjs && tsc --noEmit && vite build && node scripts/write-fingerprint.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

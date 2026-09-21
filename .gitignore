@@ -14,9 +14,18 @@ dist/
 
 # 网关的实际配置：里面有内网地址、可能有 API Key，不该进版本库。
 # 仓库里只保留 .example 模板。
-server/managed.json
-server/whitelist.txt
-server/feature.json
+#
+# 【按模式排除，不要只列这三个文件名】。只写固定文件名的话，
+# 有人建个 prod.json / managed.local.json / config.bak 照样会被提交。
+# npm run check 里还有一道：直接问 git 要"当前被跟踪的文件"，
+# server/ 下只允许 gateway.mjs / README.md / nginx.conf.sample / *.example。
+# 那一道能抓住"先提交、后加 ignore"——加 ignore 对已跟踪的文件是无效的。
+server/*.json
+server/*.txt
+server/*.local.*
+server/*.prod.*
+server/.env*
+!server/*.example
 
 # 编辑器 / 系统
 .vscode/

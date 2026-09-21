@@ -6,16 +6,18 @@
  *
  *   1. 作废的安装脚本被人"顺手修好"又投入使用
  *   2. 文档里重新出现已经被否掉的做法（装根证书、删公共缓存、双击旧 bat）
- *   3. dist/ 比源码旧，部署上去是旧版且没有任何征兆
+ *   3. dist/ 不是当前源码构建的，部署上去是旧版且没有任何征兆
+ *   4. 含内网地址或 API Key 的真实配置被提交进库
  *
- * tsc 和 vitest 都发现不了这三类，所以单独做一个检查。
+ * tsc 和 vitest 都发现不了这四类，所以单独做一个检查。
  *
  * 用法：node scripts/check-consistency.mjs
  * 退出码 0 = 通过。
  */
 
-import { readFileSync, existsSync, statSync, readdirSync } from 'node:fs';
-import { join, extname } from 'node:path';
+import { readFileSync, existsSync } from 'node:fs';
+import { execSync } from 'node:child_process';
+import { sourceFingerprint } from './source-fingerprint.mjs';
 
 const problems = [];
 const notes = [];
@@ -111,52 +113,122 @@ for (const f of DOC_FILES) {
 notes.push(`文档一致性：扫了 ${DOC_FILES.length} 个文件，无复发的旧做法`);
 
 //----------------------------------------------------------------------------
-// 3. dist/ 不能比源码旧
+// 3. dist/ 必须是【这份源码】构建出来的
 //
-// 【这是最容易出、也最没有征兆的一类】：源码改了、忘了重新构建，
+// 【最容易出、也最没有征兆的一类】：源码改了、忘了重新构建，
 // 部署上去的是旧版。用户报"新功能没有啊"，而所有测试都是绿的。
+//
+// 【判据是内容指纹，不是修改时间】。mtime 太容易骗也太容易失真：
+// touch 一下就能让"产物比源码新"成立；git checkout / 解压 / 跨机器复制
+// 之后 mtime 全变；CI 上 checkout 的源码 mtime 常常比缓存产物还新。
+// 拿它当验收依据等于没验。
 //
 // dist/ 不入库，所以本地没有它是正常的（还没构建过），只提示不算失败。
 //----------------------------------------------------------------------------
-function newestMtime(dir, skip = new Set(['node_modules', 'dist', '.git'])) {
-  let newest = 0;
-  let newestFile = '';
-  const walk = (d) => {
-    for (const name of readdirSync(d, { withFileTypes: true })) {
-      if (skip.has(name.name)) continue;
-      const full = join(d, name.name);
-      if (name.isDirectory()) { walk(full); continue; }
-      // 只看会进构建产物的源码
-      if (!['.ts', '.tsx', '.css', '.html', '.json'].includes(extname(name.name))) continue;
-      // 测试文件不进产物，改它不需要重新构建——把它算进来就是误报，
-      // 而一条经常误报的检查等于没有检查
-      if (/\.(test|spec)\.(ts|tsx)$/.test(name.name)) continue;
-      const m = statSync(full).mtimeMs;
-      if (m > newest) { newest = m; newestFile = full; }
-    }
-  };
-  walk(dir);
-  return { newest, newestFile };
-}
+const FP_FILE = 'dist/.build-fingerprint';
 
 if (!existsSync('dist')) {
   notes.push('dist/ 不存在（还没构建过）——部署前记得 npm run build');
-} else {
-  const { newest, newestFile } = newestMtime('src');
-  const distNewest = Math.max(
-    ...readdirSync('dist', { recursive: true, withFileTypes: true })
-      .filter((e) => e.isFile())
-      .map((e) => statSync(join(e.parentPath ?? e.path, e.name)).mtimeMs),
+} else if (!existsSync(FP_FILE)) {
+  fail(
+    `dist/ 存在但没有 ${FP_FILE}。
+` +
+    `    说明它不是用当前的构建流程产出的（或是手工拼的），无法确认对应哪份源码。
+` +
+    `    请重新 npm run build。`,
   );
-  if (newest > distNewest) {
+} else {
+  const { hash: nowHash, fileCount } = sourceFingerprint('.');
+  let recorded = null;
+  try {
+    recorded = JSON.parse(readFileSync(FP_FILE, 'utf8'));
+  } catch {
+    fail(`${FP_FILE} 读不出来或格式坏了，无法确认产物与源码是否一致。请重新构建。`);
+  }
+
+  if (recorded) {
+    if (recorded.hash !== nowHash) {
+      fail(
+        `dist/ 不是当前源码构建的（指纹对不上）。
+` +
+        `    产物记录：${String(recorded.hash).slice(0, 16)}…（构建于 ${recorded.builtAt ?? '未知'}）
+` +
+        `    当前源码：${nowHash.slice(0, 16)}…（${fileCount} 个源文件）
+` +
+        `    直接部署会把旧版发上线，而且【没有任何征兆】。请先 npm run build。`,
+      );
+    } else {
+      notes.push(`dist/ 与当前源码一致（指纹 ${nowHash.slice(0, 12)}…，${fileCount} 个源文件）`);
+    }
+  }
+}
+
+//----------------------------------------------------------------------------
+// 4. server/ 下不能有被 git 跟踪的真实配置
+//
+// 【.gitignore 挡不住"先提交、后加 ignore"】。一旦某个含 API Key 或内网
+// 地址的文件已经被跟踪，之后再往 .gitignore 里加规则是没用的——它照样在
+// 库里，而且已经进了历史。所以这里直接问 git 要"当前被跟踪的文件"。
+//
+// server/ 下只允许三类：程序本身、说明、样例模板。
+//----------------------------------------------------------------------------
+const SERVER_ALLOWED = [
+  /^server\/README\.md$/,
+  /^server\/gateway\.mjs$/,
+  /^server\/nginx\.conf\.sample$/,
+  /\.example$/,
+];
+
+try {
+  const tracked = execSync('git ls-files server', { encoding: 'utf8' })
+    .split(/\r?\n/)
+    .map((l) => l.trim().replace(/\\/g, '/'))
+    .filter(Boolean);
+
+  const unexpected = tracked.filter((f) => !SERVER_ALLOWED.some((re) => re.test(f)));
+  if (unexpected.length) {
     fail(
-      `dist/ 比源码旧：${newestFile} 改于 ${new Date(newest).toLocaleString()}，` +
-      `dist 最新文件是 ${new Date(distNewest).toLocaleString()}。\n` +
-      `    直接部署会把旧版发上线，而且【没有任何征兆】。请先 npm run build。`,
+      'server/ 下有不该入库的文件（可能含内网地址或 API Key）：\n' +
+        unexpected.map((f) => `      ${f}`).join('\n') +
+        '\n    只有 gateway.mjs / README.md / nginx.conf.sample / *.example 该入库。' +
+        '\n    真实配置保持在本地；已经提交过的要 git rm --cached 撤下来' +
+        '（注意它仍留在历史里）。',
     );
   } else {
-    notes.push('dist/ 不比源码旧');
+    notes.push(`server/ 入库 ${tracked.length} 个文件，均为程序/说明/样例`);
   }
+
+  // 顺带扫一遍【所有被跟踪的文件】有没有像密钥的东西。
+  // 锁文件里全是包名，噪声太大，跳过。
+  const allTracked = execSync('git ls-files', { encoding: 'utf8' })
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .filter((f) => !/package-lock\.json$/.test(f));
+
+  const SECRET_PAT = [
+    { re: /\bsk-[A-Za-z0-9]{16,}/, why: 'OpenAI 风格的 API Key' },
+    { re: /\bBearer\s+[A-Za-z0-9._-]{24,}/, why: '硬编码的 Bearer token' },
+    { re: /-----BEGIN (RSA |EC )?PRIVATE KEY-----/, why: '私钥' },
+  ];
+  let scanned = 0;
+  for (const f of allTracked) {
+    if (!existsSync(f)) continue;
+    let text;
+    try {
+      text = readFileSync(f, 'utf8');
+    } catch {
+      continue;
+    }
+    scanned++;
+    for (const p of SECRET_PAT) {
+      if (p.re.test(text)) fail(`${f} 里疑似含有${p.why}，不应入库`);
+    }
+  }
+  notes.push(`密钥扫描：${scanned} 个入库文件，未发现疑似密钥`);
+} catch {
+  // 不在 git 仓库里（比如从 zip 解压出来）时跳过，不算失败
+  notes.push('跳过入库文件检查（当前不在 git 仓库中）');
 }
 
 //----------------------------------------------------------------------------
