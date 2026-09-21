@@ -15,8 +15,14 @@ import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, extname, relative, sep } from 'node:path';
 
-/** 会影响构建产物的源文件后缀 */
-const SOURCE_EXT = ['.ts', '.tsx', '.css', '.html', '.json'];
+/**
+ * 会影响构建产物的源文件后缀。
+ *
+ * 【.xml 必须在里面】：manifest.xml 虽然列在 roots 里，但如果扩展名
+ * 不在这张表上，isSource() 会把它滤掉——结果是"列了但没算"，
+ * 改了 manifest 检查也不报。评审发现的。
+ */
+const SOURCE_EXT = ['.ts', '.tsx', '.css', '.html', '.json', '.xml', '.mjs'];
 
 /** 这些目录不进产物 */
 const SKIP_DIRS = new Set(['node_modules', 'dist', '.git', '.certs']);
@@ -54,7 +60,18 @@ function walk(dir, out = []) {
  * 不归一化的话同一份源码在两个平台上指纹不同，CI 永远报过期。
  */
 export function sourceFingerprint(root = '.') {
-  const roots = ['src', 'public', 'manifest.xml', 'package.json', 'vite.config.ts', 'index.html'];
+  // 【构建脚本本身也是输入】。改了 gen-version.mjs 之类的东西却没重新
+  // 构建，产物同样是过期的——而那种情况只看 src/ 是发现不了的。
+  const roots = [
+    'src',
+    'public',
+    'scripts',
+    'manifest.xml',
+    'package.json',
+    'tsconfig.json',
+    'vite.config.ts',
+    'index.html',
+  ];
 
   const files = [];
   for (const r of roots) {

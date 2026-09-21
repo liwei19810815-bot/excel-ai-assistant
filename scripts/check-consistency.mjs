@@ -172,14 +172,40 @@ if (!existsSync('dist')) {
 //
 // server/ 下只允许三类：程序本身、说明、样例模板。
 //----------------------------------------------------------------------------
+// 【路径必须锚定到 server/ 直属】。只写 /\.example$/ 的话，
+// server/subdir/secret.example 这种嵌套路径能绕过去（评审发现）。
 const SERVER_ALLOWED = [
   /^server\/README\.md$/,
   /^server\/gateway\.mjs$/,
   /^server\/nginx\.conf\.sample$/,
-  /\.example$/,
+  /^server\/[^/]+\.example$/,
 ];
 
-try {
+/**
+ * 【"不在 git 仓库"和"git 执行失败"必须分开】。
+ *
+ * 原先是一个 try/catch 全兜住，任何异常都记成"跳过检查"——
+ * 那是 fail-open：git 坏了、权限不对、仓库损坏，安全检查统统静默放行，
+ * 而输出看起来一切正常。
+ *
+ * 现在先单独判断是不是仓库：不是就明确跳过（从 zip 解压出来跑就是这种情况）；
+ * 是仓库却执行失败，那是真问题，必须报出来。
+ */
+function insideGitRepo() {
+  try {
+    return execSync('git rev-parse --is-inside-work-tree', {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim() === 'true';
+  } catch {
+    return false;
+  }
+}
+
+if (!insideGitRepo()) {
+  notes.push('跳过入库文件检查（当前不在 git 仓库中，例如从压缩包解压出来）');
+} else {
+  try {
   const tracked = execSync('git ls-files server', { encoding: 'utf8' })
     .split(/\r?\n/)
     .map((l) => l.trim().replace(/\\/g, '/'))
@@ -225,10 +251,12 @@ try {
       if (p.re.test(text)) fail(`${f} 里疑似含有${p.why}，不应入库`);
     }
   }
-  notes.push(`密钥扫描：${scanned} 个入库文件，未发现疑似密钥`);
-} catch {
-  // 不在 git 仓库里（比如从 zip 解压出来）时跳过，不算失败
-  notes.push('跳过入库文件检查（当前不在 git 仓库中）');
+    notes.push(`密钥扫描：${scanned} 个入库文件，未发现疑似密钥`);
+  } catch (e) {
+    // 【在仓库里却执行失败 = 真问题】，不能当作"跳过"放行
+    fail(`在 git 仓库里但入库文件检查执行失败：${e?.message ?? e}\n` +
+         `    这道检查是防止真实配置/密钥入库的，不能静默跳过。`);
+  }
 }
 
 //----------------------------------------------------------------------------
