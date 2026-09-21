@@ -14,7 +14,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "validate": "office-addin-manifest validate manifest.xml",
-    "certs": "office-addin-dev-certs install"
+    "certs": "office-addin-dev-certs install",
+    "check": "node scripts/check-consistency.mjs",
+    "verify": "npm run typecheck && npm test && npm run check"
   },
   "dependencies": {
     "react": "^18.3.1",
