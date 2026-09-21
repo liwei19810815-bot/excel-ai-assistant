@@ -1,0 +1,26 @@
+# 依赖：由 package-lock.json 锁定，不入库（519 MB）
+node_modules/
+
+# 构建产物：由 npm run build 从源码生成，不入库。
+# 【产物不入库不等于可以随便部署旧产物】——部署前必须重新构建，
+# 否则会出现"源码已修、线上还是旧版"，而且没有任何征兆。
+dist/
+
+# 本地开发证书（npm run certs 生成，每台机器自己的）
+.certs/
+*.pem
+*.key
+*.crt
+
+# 网关的实际配置：里面有内网地址、可能有 API Key，不该进版本库。
+# 仓库里只保留 .example 模板。
+server/managed.json
+server/whitelist.txt
+server/feature.json
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log

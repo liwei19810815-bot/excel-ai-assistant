@@ -1,0 +1,8 @@
+{
+  "_说明": "AI 功能的可见性开关。改完不用重启服务，下一次请求即生效。",
+  "_visibility": "0=不可见（安装时就不注册加载项）  1=可见可使用  2=可见但置灰不可用",
+  "visibility": 1,
+
+  "_visibilityOverrides": "针对个别账号的例外，优先于上面的 visibility。键是 Windows 登录名，不区分大小写。",
+  "visibilityOverrides": {}
+}

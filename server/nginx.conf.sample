@@ -1,0 +1,79 @@
+# AI 助手网关的 nginx 样例配置。
+#
+# 它负责两件事：终止 https、把 /api/ 转给 gateway.mjs，其余当静态文件发。
+#
+# ============================================================================
+# ⚠ 最重要的一条：证书必须是【客户端已经信任】的
+# ============================================================================
+# Office.js 要求任务窗格的 SourceLocation 必须是 https（localhost 除外）。
+# 证书不被信任时，Excel 里的任务窗格是【空白的，而且不报任何错】——
+# 用户只会说"AI 打不开"，排查起来毫无线索。
+#
+# 所以证书要么来自域内 PKI（根证书已由组策略下发到所有客户端），
+# 要么是公网证书。
+#
+# 【不要用自签证书 + 让安装包去装根证书】。往用户的受信任根存储里塞
+# 一个根证书，等于让它能为【任意域】签发被这台机器信任的证书，
+# 影响远不止这一个加载项。真要用自签，也该由 IT 用组策略统一下发。
+#
+# 部署完先做这一步验证：在一台【普通用户的机器】上用浏览器打开
+# https://你的网关地址/ ，不弹任何证书警告才算过。
+# ============================================================================
+
+server {
+    listen 443 ssl;
+    http2 on;
+
+    # 用你们自己的域名。Office 加载项对 IP 地址的证书支持很差，
+    # 能用域名就别用 IP。
+    server_name ai.corp.example.com;
+
+    ssl_certificate     /etc/nginx/certs/ai.corp.example.com.crt;
+    ssl_certificate_key /etc/nginx/certs/ai.corp.example.com.key;
+
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+
+    # 任务窗格的静态文件（vite build 的产物）
+    root /var/www/excel-ai;
+    index index.html;
+
+    # 带内容哈希的资源可以长期缓存
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # 【manifest 和 index.html 绝不缓存】。
+    # 缓存住的话，发了新版本客户端还在用旧的，而且查不出原因。
+    location = /index.html {
+        add_header Cache-Control "no-store";
+    }
+
+    # 配置接口转给 gateway.mjs
+    #
+    # 【这条也绝不能缓存】：把某个人移出白名单之后，
+    # 缓存会让他继续拿到 managed 配置，管控就失效了。
+    location /api/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        add_header Cache-Control "no-store" always;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+
+# http 一律跳 https。
+# Office 加载项本来就不接受 http 的 SourceLocation，
+# 留着这条只是为了让人用浏览器访问时不至于一脸懵。
+server {
+    listen 80;
+    server_name ai.corp.example.com;
+    return 301 https://$host$request_uri;
+}

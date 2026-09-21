@@ -1,0 +1,7 @@
+{
+  "baseUrl": "http://10.0.0.10:8000/v1",
+  "model": "qwen2.5-32b-instruct",
+  "apiKey": "",
+  "enableRunScript": false,
+  "managedBy": "IT 运维"
+}
