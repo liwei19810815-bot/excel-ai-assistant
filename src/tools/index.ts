@@ -7,5 +7,6 @@ import './excel/write';
 import './excel/structure';
 import './excel/chart';
 import './sandbox/runScript';
+import './sidecar/powerQuery';
 
 export * from './registry';

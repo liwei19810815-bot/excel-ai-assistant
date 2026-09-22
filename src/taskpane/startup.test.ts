@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { provision, applyRibbonVisibility } from '../store/provisioning';
 import { runStartup } from './startup';
 import { useSettings } from '../store/settings';
+import * as sidecarMod from '../store/sidecar';
+import { getSidecarStatus, setSidecarStatus } from '../store/sidecar';
 
 /**
  * 启动路径的测试。
@@ -157,5 +159,58 @@ describe('runStartup 链路', () => {
     expect(r.ribbonUpdated).toBe(false);
     // 【不能因为按钮更新不了就不放行】——那会让老版本 Office 上的人用不了
     expect(useSettings.getState().provision.status).toBe('ready');
+  });
+});
+
+/**
+ * sidecar 探测在启动链路里的接线。
+ *
+ * 【这几条是变异测试逼出来的】：把 runStartup 里的 setSidecarStatus(sidecar)
+ * 整行删掉，原来【没有任何测试变红】——而那一行没了的后果是
+ * ChatPane 永远读到默认的"不可用"，sidecar 装了也用不上，
+ * 且不会有任何报错。典型的"接线断了但没人知道"。
+ */
+describe('启动路径：sidecar 探测的接线', () => {
+  beforeEach(() => {
+    setSidecarStatus({ available: false, port: 0, version: '', reason: '重置' });
+  });
+
+  it('探到了就要把状态存下来（ChatPane 靠它决定工具列表）', async () => {
+    const status = { available: true, port: 8899, version: '0.1.0', reason: '' };
+    const spy = vi.spyOn(sidecarMod, 'probeSidecar').mockResolvedValue(status);
+    try {
+      const r = await runStartup();
+      expect(r.sidecar.available).toBe(true);
+      // 【关键】：不只看返回值，还要看它真的落进了共享状态
+      expect(getSidecarStatus()).toEqual(status);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('探不到时状态是不可用，但启动本身照常完成', async () => {
+    const spy = vi.spyOn(sidecarMod, 'probeSidecar').mockResolvedValue({
+      available: false, port: 0, version: '', reason: '没找到',
+    });
+    try {
+      const r = await runStartup();
+      expect(r.sidecar.available).toBe(false);
+      expect(getSidecarStatus().available).toBe(false);
+      // 【铁律】：sidecar 不在 ≠ AI 坏了。启动链路其余部分必须照常。
+      expect(r.visibility).toBe(1);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('探测自己抛异常也不能把启动打断', async () => {
+    const spy = vi.spyOn(sidecarMod, 'probeSidecar').mockRejectedValue(new Error('boom'));
+    try {
+      const r = await runStartup();
+      expect(r.sidecar.available).toBe(false);
+      expect(r.visibility).toBe(1);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

@@ -10,8 +10,10 @@ describe('工具注册表', () => {
       'format_cells',
       'get_selection',
       'get_workbook_overview',
+      'list_queries',
       'modify_structure',
       'read_range',
+      'refresh_query',
       'run_script',
       'write_cells',
     ]);
@@ -20,6 +22,26 @@ describe('工具注册表', () => {
   it('破坏性工具标记为 mutate:structure，会触发强制确认', () => {
     expect(get('modify_structure')!.policy).toBe('mutate:structure');
     expect(get('run_script')!.policy).toBe('mutate:structure');
+
+    // 刷新 Power Query 会把表里的数据整片换掉，而且【工具箱的撤销框架
+    // 覆盖不到它】——那套快照是给 VBA 命令用的，sidecar 的改动它不知道。
+    // 事实上不可撤销，所以必须强制确认。
+    expect(get('refresh_query')!.policy).toBe('mutate:structure');
+  });
+
+  it('sidecar 的只读工具不标成会改表', () => {
+    // 标反了比不标更糟：用户以为只是看看，结果被要求确认一个破坏性操作，
+    // 或者反过来，一个会改数据的动作悄悄跑掉了。
+    expect(get('list_queries')!.policy).toBe('read');
+  });
+
+  it('sidecar 类工具能被整体摘掉（sidecar 没跑时就靠这个）', () => {
+    const defs = toToolDefs(new Set(['list_queries', 'refresh_query']));
+    const names = defs.map((d) => d.name);
+    expect(names).not.toContain('list_queries');
+    expect(names).not.toContain('refresh_query');
+    // 其余工具不受影响——这是"安静降级"的关键
+    expect(names).toContain('read_range');
   });
 
   it('只读工具不建快照', () => {

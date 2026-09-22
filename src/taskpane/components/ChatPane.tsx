@@ -7,6 +7,8 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { SettingsPage } from './SettingsPage';
 import { QuickActions } from './QuickActions';
 import { onUpdateAvailable, startUpdatePolling } from '../version';
+import { getSidecarStatus } from '../../store/sidecar';
+import { SIDECAR_TOOL_NAMES } from '../../tools/sidecar/powerQuery';
 
 export function ChatPane() {
   const session = useSession();
@@ -46,6 +48,12 @@ export function ChatPane() {
     // 关掉 run_script 时从工具列表中摘除，模型就看不到它
     const disabled = new Set<string>();
     if (!settings.enableRunScript) disabled.add('run_script');
+
+    // sidecar 没跑就把它那几个工具摘掉，模型看不到就不会承诺做不到的事。
+    // 【这是安静降级】：不弹窗、不报错，AI 其余功能完全正常。
+    if (!getSidecarStatus().available) {
+      for (const n of SIDECAR_TOOL_NAMES) disabled.add(n);
+    }
 
     try {
       await runAgent(session.history, {
