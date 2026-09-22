@@ -107,11 +107,17 @@ describe('启动路径', () => {
     expect(await applyRibbonVisibility(2)).toBe(true);
     expect(await applyRibbonVisibility(0)).toBe(true);
 
-    const enabled = calls.map(
-      (c) => (c as { tabs: { groups: { controls: { enabled: boolean }[] }[] }[] })
-        .tabs[0].groups[0].controls[0].enabled,
+    // 【manifest 里两个按钮都要被管到】，漏一个就是"亮着但没用"
+    const perCall = calls.map(
+      (c) => (c as { tabs: { groups: { controls: { id: string; enabled: boolean }[] }[] }[] })
+        .tabs[0].groups[0].controls,
     );
-    expect(enabled).toEqual([true, false, false]);
+    for (const controls of perCall) {
+      expect(controls.map((x) => x.id).sort()).toEqual(
+        ['ExcelAI.AskSelection', 'ExcelAI.OpenPane'],
+      );
+    }
+    expect(perCall.map((cs) => cs.every((x) => x.enabled))).toEqual([true, false, false]);
   });
 });
 
@@ -126,10 +132,9 @@ describe('runStartup 链路', () => {
     (globalThis as { Office?: unknown }).Office = {
       ribbon: {
         requestUpdate: async (arg: unknown) => {
-          seen.push(
-            (arg as { tabs: { groups: { controls: { enabled: boolean }[] }[] }[] })
-              .tabs[0].groups[0].controls[0].enabled,
-          );
+          const cs = (arg as { tabs: { groups: { controls: { enabled: boolean }[] }[] }[] })
+            .tabs[0].groups[0].controls;
+          seen.push(cs.every((x) => x.enabled));
         },
       },
       context: { requirements: { isSetSupported: () => true } },
@@ -142,7 +147,7 @@ describe('runStartup 链路', () => {
     expect(r.visibility).toBe(1);
     // 【关键】：链路走通了，按钮被更新过，且传的是 visibility 对应的值
     expect(r.ribbonUpdated).toBe(true);
-    expect(seen).toEqual([true]);
+    expect(seen).toEqual([true]);   // 两个按钮同时被置为可用
     expect(useSettings.getState().provision.status).toBe('ready');
   });
 

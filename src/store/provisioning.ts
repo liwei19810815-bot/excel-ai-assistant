@@ -269,6 +269,11 @@ export async function applyRibbonVisibility(visibility: Visibility): Promise<boo
     if (!off?.ribbon?.requestUpdate) return false;
     if (!off.context?.requirements?.isSetSupported?.('RibbonApi', '1.1')) return false;
 
+    // 【manifest 里声明了几个按钮，这里就要列几个】。
+    // 只置灰 OpenPane 的话，AskSelection 还亮着——用户点它会打开窗格、
+    // 看到"已停用"，一个亮着却什么也做不了的按钮比灰掉更让人困惑。
+    // 加按钮时别忘了同步这里；check-consistency 有一条断言守着这件事。
+    const enabled = visibility === 1;
     await off.ribbon.requestUpdate({
       tabs: [
         {
@@ -276,7 +281,10 @@ export async function applyRibbonVisibility(visibility: Visibility): Promise<boo
           groups: [
             {
               id: 'ExcelAI.Group',
-              controls: [{ id: 'ExcelAI.OpenPane', enabled: visibility === 1 }],
+              controls: [
+                { id: 'ExcelAI.OpenPane', enabled },
+                { id: 'ExcelAI.AskSelection', enabled },
+              ],
             },
           ],
         },

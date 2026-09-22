@@ -164,7 +164,34 @@ if (!existsSync('dist')) {
 }
 
 //----------------------------------------------------------------------------
-// 4. server/ 下不能有被 git 跟踪的真实配置
+// 4. manifest 里声明的每个按钮，可见性开关都要管到
+//
+// 【漏一个就是一个"亮着但没用"的按钮】。manifest 里加了按钮却忘了在
+// applyRibbonVisibility 里列上，服务端把功能关掉之后那个按钮照样是亮的，
+// 用户点它打开窗格看到"已停用"——比直接置灰更让人困惑。
+// 而这种漏，tsc 和单元测试都发现不了。
+//----------------------------------------------------------------------------
+{
+  const mf = read('manifest.xml');
+  const prov = read('src/store/provisioning.ts');
+
+  const declared = [...mf.matchAll(/<Control[^>]*\sid="([^"]+)"/g)].map((m) => m[1]);
+  const handled = [...prov.matchAll(/id:\s*'([^']+)'/g)].map((m) => m[1]);
+
+  const missing = declared.filter((id) => !handled.includes(id));
+  if (missing.length) {
+    fail(
+      `manifest 里这些按钮没被可见性开关管到：${missing.join('、')}\n` +
+        `    功能被关掉时它们还是亮的，点了只会看到"已停用"。\n` +
+        `    请在 src/store/provisioning.ts 的 applyRibbonVisibility 里补上。`,
+    );
+  } else if (declared.length) {
+    notes.push(`功能区按钮 ${declared.length} 个，均已纳入可见性开关`);
+  }
+}
+
+//----------------------------------------------------------------------------
+// 5. server/ 下不能有被 git 跟踪的真实配置
 //
 // 【.gitignore 挡不住"先提交、后加 ignore"】。一旦某个含 API Key 或内网
 // 地址的文件已经被跟踪，之后再往 .gitignore 里加规则是没用的——它照样在
