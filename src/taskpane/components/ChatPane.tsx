@@ -5,19 +5,14 @@ import { runAgent, describeError } from '../../agent/loop';
 import { ToolCallCard } from './ToolCallCard';
 import { ConfirmDialog } from './ConfirmDialog';
 import { SettingsPage } from './SettingsPage';
+import { QuickActions } from './QuickActions';
 import { onUpdateAvailable, startUpdatePolling } from '../version';
-
-const EXAMPLES = [
-  '在当前表造一张 12 个月的销售数据表',
-  '把标题行加粗、底色深蓝、白字',
-  '根据这张表做一个柱状图',
-  '这块选中的数据有什么问题？',
-];
 
 export function ChatPane() {
   const session = useSession();
   const settings = useSettings();
   const [input, setInput] = useState('');
+  const [showQuick, setShowQuick] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -95,17 +90,6 @@ export function ChatPane() {
   }
 
   /**
-   * 服务端把 AI 功能关掉了（visibility 0 或 2）。
-   *
-   * 【这里是真正的强制点】。功能区按钮置灰只是"看起来不能用"——
-   * 而且没有共享运行时的话，按钮要等加载项跑起来之后才会变灰，
-   * 用户第一次点开之前它是正常的。所以拦截必须落在窗格里：
-   * 无论他怎么点进来，看到的都是这一页，聊天界面根本不渲染。
-   *
-   * 0 和 2 在这里的行为一样。区别在安装侧：0 会让安装程序【不注册】
-   * 这个加载项，按钮从一开始就不存在；2 保留按钮只是置灰。
-   */
-  /**
    * 还没问到网关的配置。
    *
    * 【这段不能放行】。原先是界面先挂出来、provision 在后台异步跑，
@@ -124,6 +108,17 @@ export function ChatPane() {
     );
   }
 
+  /**
+   * 服务端把 AI 功能关掉了（visibility 0 或 2）。
+   *
+   * 【这里是真正的强制点】。功能区按钮置灰只是"看起来不能用"——
+   * 而且没有共享运行时的话，按钮要等加载项跑起来之后才会变灰，
+   * 用户第一次点开之前它是正常的。所以拦截必须落在窗格里：
+   * 无论他怎么点进来，看到的都是这一页，聊天界面根本不渲染。
+   *
+   * 0 和 2 在这里的行为一样。区别在安装侧：0 会让安装程序【不注册】
+   * 这个加载项，按钮从一开始就不存在；2 保留按钮只是置灰。
+   */
   if (settings.provision.visibility !== 1) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 bg-white p-6 text-center">
@@ -152,6 +147,12 @@ export function ChatPane() {
               新对话
             </button>
           )}
+          <button
+            onClick={() => setShowQuick((v) => !v)}
+            className={showQuick ? 'text-sky-700 underline' : 'text-sky-600 hover:underline'}
+          >
+            常用操作
+          </button>
           <button onClick={() => setShowSettings(true)} className="text-sky-600 hover:underline">
             设置
           </button>
@@ -167,6 +168,17 @@ export function ChatPane() {
         </button>
       )}
 
+      {showQuick && session.messages.length > 0 && (
+        <div className="max-h-64 overflow-auto border-b border-neutral-200 bg-white p-3">
+          <QuickActions
+            onPick={(prompt) => {
+              setInput(prompt);
+              setShowQuick(false);
+            }}
+          />
+        </div>
+      )}
+
       <div ref={scrollRef} className="flex-1 space-y-3 overflow-auto p-3">
         {session.messages.length === 0 && (
           <div className="space-y-3 pt-6 text-center">
@@ -176,17 +188,12 @@ export function ChatPane() {
                 : '还没有配置模型，先去设置页填写接口地址和模型名称。'}
             </p>
             {configured && (
-              <div className="space-y-1.5">
-                {EXAMPLES.map((ex) => (
-                  <button
-                    key={ex}
-                    onClick={() => setInput(ex)}
-                    className="block w-full rounded border border-neutral-200 bg-white px-2.5 py-1.5 text-left text-xs text-neutral-600 hover:border-sky-300 hover:text-sky-700"
-                  >
-                    {ex}
-                  </button>
-                ))}
-              </div>
+              <QuickActions
+                onPick={(prompt) => {
+                  setInput(prompt);
+                  setShowQuick(false);
+                }}
+              />
             )}
             {!configured && (
               <button
