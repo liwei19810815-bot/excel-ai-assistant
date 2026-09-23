@@ -9,6 +9,7 @@ import { QuickActions } from './QuickActions';
 import { onUpdateAvailable, startUpdatePolling } from '../version';
 import { getSidecarStatus } from '../../store/sidecar';
 import { SIDECAR_TOOL_NAMES } from '../../tools/sidecar/powerQuery';
+import { RUN_MACRO_TOOL_NAMES } from '../../tools/sidecar/runMacro';
 
 export function ChatPane() {
   const session = useSession();
@@ -53,6 +54,7 @@ export function ChatPane() {
     // 【这是安静降级】：不弹窗、不报错，AI 其余功能完全正常。
     if (!getSidecarStatus().available) {
       for (const n of SIDECAR_TOOL_NAMES) disabled.add(n);
+      for (const n of RUN_MACRO_TOOL_NAMES) disabled.add(n);
     }
 
     try {

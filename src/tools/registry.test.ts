@@ -10,10 +10,12 @@ describe('工具注册表', () => {
       'format_cells',
       'get_selection',
       'get_workbook_overview',
+      'list_macros',
       'list_queries',
       'modify_structure',
       'read_range',
       'refresh_query',
+      'run_macro',
       'run_script',
       'write_cells',
     ]);
@@ -27,19 +29,26 @@ describe('工具注册表', () => {
     // 覆盖不到它】——那套快照是给 VBA 命令用的，sidecar 的改动它不知道。
     // 事实上不可撤销，所以必须强制确认。
     expect(get('refresh_query')!.policy).toBe('mutate:structure');
+
+    // 调宏比刷新查询风险更高——宏可以做任何事，执行前完全不知道
+    // 它会改什么，唯一的安全边界是用户点头，绝不能标成只读。
+    expect(get('run_macro')!.policy).toBe('mutate:structure');
   });
 
   it('sidecar 的只读工具不标成会改表', () => {
     // 标反了比不标更糟：用户以为只是看看，结果被要求确认一个破坏性操作，
     // 或者反过来，一个会改数据的动作悄悄跑掉了。
     expect(get('list_queries')!.policy).toBe('read');
+    expect(get('list_macros')!.policy).toBe('read');
   });
 
   it('sidecar 类工具能被整体摘掉（sidecar 没跑时就靠这个）', () => {
-    const defs = toToolDefs(new Set(['list_queries', 'refresh_query']));
+    const defs = toToolDefs(new Set(['list_queries', 'refresh_query', 'list_macros', 'run_macro']));
     const names = defs.map((d) => d.name);
     expect(names).not.toContain('list_queries');
     expect(names).not.toContain('refresh_query');
+    expect(names).not.toContain('list_macros');
+    expect(names).not.toContain('run_macro');
     // 其余工具不受影响——这是"安静降级"的关键
     expect(names).toContain('read_range');
   });
