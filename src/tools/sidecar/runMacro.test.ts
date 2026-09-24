@@ -124,11 +124,63 @@ describe('run_macro：前缀校验', () => {
     setSidecarStatus(up);
     const fetchImpl = mockFetch(async (url) => {
       if (url.includes('/health')) return healthOk();
+      if (url.includes('/confirm-macro')) return confirmOk();
       return { ok: true, json: async () => ({ ok: true, name: 'AI_Test', result: '' }) };
     });
     const tool = get('run_macro')!;
     await tool.run({ name: 'AI_Test' }, {} as never);
     expect(fetchImpl).toHaveBeenCalled();
+  });
+});
+
+// 走到 tool.run() 时，mutate:structure 的确认弹窗已经让用户点过"允许"了
+// （那道确认在 agent/loop.ts 里、tool.run() 之前完成）。但 sidecar 自己
+// 不认"任务窗格弹过窗"这件事，只认令牌，所以这里必须先换一张绑定
+// "宏名+参数"的一次性确认票，/run-macro 才会真的执行——这是本轮堵住
+// "光有令牌就能绕过确认"这个高危漏洞的机制，见 sidecar 那边的注释。
+function confirmOk(token = 'ticket-abc') {
+  return { ok: true, json: async () => ({ ok: true, confirmToken: token }) };
+}
+
+describe('run_macro：先换确认票，再真正调用', () => {
+  it('会先调 /confirm-macro，拿到票才调 /run-macro，且票会带进请求体', async () => {
+    setSidecarStatus(up);
+    const calls: string[] = [];
+    let runMacroBody: string | undefined;
+    mockFetch(async (url, init) => {
+      calls.push(url as string);
+      if (url.includes('/health')) return healthOk();
+      if (url.includes('/confirm-macro')) return confirmOk('the-real-ticket');
+      runMacroBody = init?.body as string;
+      return { ok: true, json: async () => ({ ok: true, name: 'AI_Test', result: '' }) };
+    });
+
+    const tool = get('run_macro')!;
+    await tool.run({ name: 'AI_Test' }, {} as never);
+
+    const confirmIdx = calls.findIndex((u) => u.includes('/confirm-macro'));
+    const runIdx = calls.findIndex((u) => u.includes('/run-macro'));
+    expect(confirmIdx).toBeGreaterThanOrEqual(0);
+    expect(runIdx).toBeGreaterThan(confirmIdx);
+    expect(JSON.parse(runMacroBody!).confirmToken).toBe('the-real-ticket');
+  });
+
+  it('/confirm-macro 本身失败时，不会去调 /run-macro，也不报成功', async () => {
+    setSidecarStatus(up);
+    const fetchImpl = mockFetch(async (url) => {
+      if (url.includes('/health')) return healthOk();
+      if (url.includes('/confirm-macro')) {
+        return { ok: true, json: async () => ({ ok: false, error: 'macro_not_allowed' }) };
+      }
+      throw new Error('不该调用 /run-macro');
+    });
+
+    const tool = get('run_macro')!;
+    const r = await tool.run({ name: 'AI_Test' }, {} as never);
+    expect(r.text).not.toContain('已调用');
+    for (const [url] of fetchImpl.mock.calls) {
+      expect(url as string).not.toContain('/run-macro');
+    }
   });
 });
 
@@ -139,6 +191,7 @@ describe('run_macro：请求内容', () => {
     let capturedHeaders: Record<string, string> | undefined;
     mockFetch(async (url, init) => {
       if (url.includes('/health')) return healthOk();
+      if (url.includes('/confirm-macro')) return confirmOk();
       capturedBody = init?.body as string;
       capturedHeaders = init?.headers as Record<string, string>;
       return { ok: true, json: async () => ({ ok: true, name: 'AI_Test', result: 'done' }) };
@@ -147,7 +200,7 @@ describe('run_macro：请求内容', () => {
     const tool = get('run_macro')!;
     await tool.run({ name: 'AI_Test', args: ['x', 1, true] }, {} as never);
 
-    expect(JSON.parse(capturedBody!)).toEqual({ name: 'AI_Test', args: ['x', 1, true] });
+    expect(JSON.parse(capturedBody!)).toEqual({ name: 'AI_Test', args: ['x', 1, true], confirmToken: 'ticket-abc' });
     expect(capturedHeaders?.['X-Toolbox-Token']).toBeDefined();
   });
 
@@ -156,6 +209,7 @@ describe('run_macro：请求内容', () => {
     let capturedBody: string | undefined;
     mockFetch(async (url, init) => {
       if (url.includes('/health')) return healthOk();
+      if (url.includes('/confirm-macro')) return confirmOk();
       capturedBody = init?.body as string;
       return { ok: true, json: async () => ({ ok: true, name: 'AI_Test' }) };
     });
@@ -171,6 +225,9 @@ describe('run_macro：失败必须如实说', () => {
     ['excel_not_running', /没有在运行/],
     ['no_workbook', /没有打开的工作簿/],
     ['timeout', /超时/],
+    ['bad_args', /参数格式不对/],
+    ['com_failed', /通信时出错/],
+    ['no_result', /没有拿到执行结果/],
   ];
 
   for (const [error, expected] of cases) {
@@ -178,6 +235,7 @@ describe('run_macro：失败必须如实说', () => {
       setSidecarStatus(up);
       mockFetch(async (url) => {
         if (url.includes('/health')) return healthOk();
+        if (url.includes('/confirm-macro')) return confirmOk();
         return { ok: true, json: async () => ({ ok: false, error }) };
       });
 
@@ -192,6 +250,7 @@ describe('run_macro：失败必须如实说', () => {
     setSidecarStatus(up);
     mockFetch(async (url) => {
       if (url.includes('/health')) return healthOk();
+      if (url.includes('/confirm-macro')) return confirmOk();
       return { ok: true, json: async () => ({ ok: false, error: 'macro_failed', message: '下标越界' }) };
     });
 
@@ -205,6 +264,7 @@ describe('run_macro：失败必须如实说', () => {
     setSidecarStatus(up);
     mockFetch(async (url) => {
       if (url.includes('/health')) return healthOk();
+      if (url.includes('/confirm-macro')) return confirmOk();
       return { ok: true, json: async () => ({ ok: true, name: 'AI_Test', result: '完成' }) };
     });
 

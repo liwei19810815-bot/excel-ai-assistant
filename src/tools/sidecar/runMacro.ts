@@ -114,43 +114,89 @@ register({
       };
     }
 
-    const r = await withSidecar(async (status, token) =>
-      callSidecar<{ ok: boolean; name?: string; result?: string; error?: string; message?: string }>(
+    // ============================================================
+    // 【两步走：先换确认票，再真正调用】
+    // ============================================================
+    // 走到这里说明 mutate:structure 的确认弹窗已经让用户点过"允许"了
+    // （见 agent/loop.ts：策略确认在 tool.run() 之前完成）。但 sidecar
+    // 自己不知道这件事——它只认令牌，不认"用户点没点确认"。所以这里
+    // 用这次用户确认去换一张绑定"这个宏名 + 这些参数"的一次性票，
+    // /run-macro 必须带着它才会真的执行。这样即使 X-Toolbox-Token
+    // 单独泄露给没走过确认流程的调用方，也调不动宏。
+    //
+    // 只探测一次 sidecar 状态，两次调用共用——不用重复走一遍端口探测。
+    const outcome = await withSidecar(async (status, token) => {
+      const confirmResult = await callSidecar<{ ok: boolean; confirmToken?: string; error?: string }>(
         status,
-        '/run-macro',
+        '/confirm-macro',
         token,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: args.name, args: args.args ?? [] }),
         },
-      ),
-    );
+      );
+      if (!confirmResult.ok || !confirmResult.confirmToken) {
+        return { text: describeSidecarError(confirmResult.error, args.name) };
+      }
 
-    if (r === null) return { text: UNAVAILABLE_TEXT };
+      return callSidecar<{ ok: boolean; name?: string; result?: string; error?: string; message?: string }>(
+        status,
+        '/run-macro',
+        token,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: args.name,
+            args: args.args ?? [],
+            confirmToken: confirmResult.confirmToken,
+          }),
+        },
+      );
+    });
+
+    if (outcome === null) return { text: UNAVAILABLE_TEXT };
+    if ('text' in outcome) return outcome;
+    const r = outcome;
 
     // 【失败必须如实说】。这里最坏的结果是把"宏没跑起来"报成"跑完了"——
     // 用户以为数据已经处理好了，其实什么都没发生。
     if (!r.ok) {
-      if (r.error === 'macro_not_allowed') {
-        return { text: `宏名「${args.name}」不符合要求：只能调用以 AI_ 开头的宏。` };
-      }
-      if (r.error === 'excel_not_running') {
-        return { text: 'Excel 没有在运行，无法调用宏。' };
-      }
-      if (r.error === 'no_workbook') {
-        return { text: '当前没有打开的工作簿，无法调用宏。' };
-      }
-      if (r.error === 'timeout') {
-        return { text: '调用超时了。Excel 可能正弹着对话框，请切过去看一眼。' };
-      }
       if (r.error === 'macro_failed') {
         return { text: `宏「${args.name}」执行失败：${r.message ?? '未知原因'}` };
       }
-      return { text: `调用失败：${r.error ?? '未知原因'}` };
+      return { text: describeSidecarError(r.error, args.name) };
     }
 
     const resultText = r.result ? `，返回：${r.result}` : '';
     return { text: `已调用宏「${r.name ?? args.name}」${resultText}` };
   },
 });
+
+/** run-macro / confirm-macro 共用的错误码 → 中文提示。 */
+function describeSidecarError(error: string | undefined, macroName: string): string {
+  switch (error) {
+    case 'macro_not_allowed':
+      return `宏名「${macroName}」不符合要求：只能调用以 AI_ 开头的宏。`;
+    case 'excel_not_running':
+      return 'Excel 没有在运行，无法调用宏。';
+    case 'no_workbook':
+      return '当前没有打开的工作簿，无法调用宏。';
+    case 'timeout':
+      return '调用超时了。Excel 可能正弹着对话框，请切过去看一眼。';
+    case 'confirm_required':
+    case 'confirm_invalid':
+      return '确认已失效（可能是重复调用或参数发生了变化），请重新发起这个操作。';
+    case 'missing_name':
+      return '没有指定宏名，无法调用。';
+    case 'bad_args':
+      return '传给宏的参数格式不对：只能是字符串/数字/布尔组成的数组。';
+    case 'com_failed':
+      return '和 Excel 通信时出错了，可以重试一次；如果一直失败，请检查 Excel 是否正常。';
+    case 'no_result':
+      return '没有拿到执行结果，无法确认宏是否跑成功了，请去 Excel 里核实一下。';
+    default:
+      return `调用失败：${error ?? '未知原因'}`;
+  }
+}
