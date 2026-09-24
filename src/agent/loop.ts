@@ -1,6 +1,8 @@
 import type { ChatMessage, Provider, ToolCall } from '../llm/types';
 import { get as getTool, toToolDefs, truncate, type ConfirmPayload } from '../tools';
 import { buildBlueprint, renderBlueprint } from '../excel/blueprint';
+import { buildPptBlueprint, renderPptBlueprint } from '../powerpoint/blueprint';
+import { getHost } from '../store/host';
 import { buildSystemPrompt } from './systemPrompt';
 
 /** 单轮对话内最多的「模型→工具→模型」往返次数，防止死循环 */
@@ -226,8 +228,23 @@ function safeSummarize(tool: { summarize: (a: never) => string }, args: unknown)
   }
 }
 
-/** 蓝图取不到时不应中断整轮对话，降级为提示即可 */
+/**
+ * 蓝图取不到时不应中断整轮对话，降级为提示即可。
+ *
+ * 按探测到的宿主选对应的蓝图——host=unknown（比如浏览器里裸调、
+ * 或者 PowerPoint/Excel 都不是的宿主）时按 Excel 的老行为兜底，
+ * 不是因为 Excel 更"默认"，是因为这段代码历史上只服务过 Excel，
+ * 贸然改成"不认识就不读"会让所有现有部署在升级后突然看不到蓝图。
+ */
 async function safeContextBlock(): Promise<string> {
+  const host = getHost();
+  if (host === 'powerpoint') {
+    try {
+      return renderPptBlueprint(await buildPptBlueprint());
+    } catch (e) {
+      return `（无法读取演示文稿结构：${describeError(e)}。需要时请主动调用工具读取。）`;
+    }
+  }
   try {
     return renderBlueprint(await buildBlueprint());
   } catch (e) {

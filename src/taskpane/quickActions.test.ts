@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { QUICK_ACTIONS, QUICK_ACTION_GROUPS, actionsByGroup } from './quickActions';
+import {
+  QUICK_ACTIONS,
+  QUICK_ACTION_GROUPS,
+  actionsByGroup,
+  PPT_QUICK_ACTIONS,
+  PPT_QUICK_ACTION_GROUPS,
+  pptActionsByGroup,
+} from './quickActions';
 
 /**
  * 预置提示词的完整性。
@@ -58,6 +65,55 @@ describe('预置提示词', () => {
     // 光把 mutates 标成 false 是给界面看的；模型看的是 prompt。
     // prompt 里不写清楚，模型照样会动手。
     for (const a of QUICK_ACTIONS.filter((x) => !x.mutates)) {
+      expect(
+        /不要改|不改动|先不要|只分析|只解释|不要直接/.test(a.prompt),
+        `${a.id} 标成只读，但 prompt 没告诉模型不要改动`,
+      ).toBe(true);
+    }
+  });
+});
+
+/** PPT AI 版预置提示词——同一套完整性要求，数量小很多但规则不能降低。 */
+describe('PPT 预置提示词', () => {
+  it('id 不能重复', () => {
+    const ids = PPT_QUICK_ACTIONS.map((a) => a.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('id 和 Excel 版的不重叠，避免两套列表混着用时冲突', () => {
+    const excelIds = new Set(QUICK_ACTIONS.map((a) => a.id));
+    for (const a of PPT_QUICK_ACTIONS) {
+      expect(excelIds.has(a.id), `${a.id} 和 Excel 版的 id 撞了`).toBe(false);
+    }
+  });
+
+  it('每条都必须有 label 和 prompt', () => {
+    for (const a of PPT_QUICK_ACTIONS) {
+      expect(a.label.trim(), `${a.id} 的 label`).not.toBe('');
+      expect(a.prompt.trim(), `${a.id} 的 prompt`).not.toBe('');
+    }
+  });
+
+  it('每条的分组都必须是已声明的分组之一', () => {
+    for (const a of PPT_QUICK_ACTIONS) {
+      expect(PPT_QUICK_ACTION_GROUPS, `${a.id} 的分组「${a.group}」`).toContain(a.group);
+    }
+  });
+
+  it('每个分组都至少有一条，不能出现空分组', () => {
+    for (const g of PPT_QUICK_ACTION_GROUPS) {
+      expect(pptActionsByGroup(g).length, `分组「${g}」`).toBeGreaterThan(0);
+    }
+  });
+
+  it('prompt 要足够具体，不能是一句含糊的指令', () => {
+    for (const a of PPT_QUICK_ACTIONS) {
+      expect(a.prompt.length, `${a.id} 的 prompt 太短`).toBeGreaterThan(20);
+    }
+  });
+
+  it('只读条目的 prompt 里要明确写出"不要改"', () => {
+    for (const a of PPT_QUICK_ACTIONS.filter((x) => !x.mutates)) {
       expect(
         /不要改|不改动|先不要|只分析|只解释|不要直接/.test(a.prompt),
         `${a.id} 标成只读，但 prompt 没告诉模型不要改动`,

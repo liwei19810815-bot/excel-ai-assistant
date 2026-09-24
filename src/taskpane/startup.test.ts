@@ -4,6 +4,7 @@ import { runStartup } from './startup';
 import { useSettings } from '../store/settings';
 import * as sidecarMod from '../store/sidecar';
 import { getSidecarStatus, setSidecarStatus } from '../store/sidecar';
+import { getHost, setHost } from '../store/host';
 
 /**
  * 启动路径的测试。
@@ -212,5 +213,47 @@ describe('启动路径：sidecar 探测的接线', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+/**
+ * 宿主探测在启动链路里的接线（PPT AI 那批改动新增）。
+ *
+ * 和 sidecar 探测那组测试同一个理由：只测 detectHost() 本身证明不了
+ * runStartup() 真的把结果存进了共享状态——ChatPane 读的是 getHost()，
+ * 不是 runStartup() 的返回值本身，链路断了这里就该变红。
+ */
+describe('启动路径：宿主探测的接线', () => {
+  beforeEach(() => {
+    setHost('unknown');
+  });
+
+  it('host=Excel 时探出来并存进共享状态', async () => {
+    (globalThis as { Office?: unknown }).Office = {
+      context: { host: 'excel-host-marker', requirements: { isSetSupported: () => true } },
+      ribbon: { requestUpdate: vi.fn() },
+      HostType: { Excel: 'excel-host-marker', PowerPoint: 'ppt-host-marker' },
+    };
+    const r = await runStartup();
+    expect(r.host).toBe('excel');
+    expect(getHost()).toBe('excel');
+  });
+
+  it('host=PowerPoint 时探出来并存进共享状态', async () => {
+    (globalThis as { Office?: unknown }).Office = {
+      context: { host: 'ppt-host-marker', requirements: { isSetSupported: () => true } },
+      ribbon: { requestUpdate: vi.fn() },
+      HostType: { Excel: 'excel-host-marker', PowerPoint: 'ppt-host-marker' },
+    };
+    const r = await runStartup();
+    expect(r.host).toBe('powerpoint');
+    expect(getHost()).toBe('powerpoint');
+  });
+
+  it('没有 Office 对象时（浏览器里调 UI）不报错，宿主是 unknown', async () => {
+    delete (globalThis as { Office?: unknown }).Office;
+    const r = await runStartup();
+    expect(r.host).toBe('unknown');
+    expect(getHost()).toBe('unknown');
   });
 });

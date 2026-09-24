@@ -1,19 +1,27 @@
 import { describe, it, expect } from 'vitest';
 import './index';
 import { all, get, toToolDefs, truncate, MAX_RESULT_CHARS } from './registry';
+import { EXCEL_TOOL_NAMES } from './excel';
+import { POWERPOINT_TOOL_NAMES } from './powerpoint';
+import { SIDECAR_TOOL_NAMES } from './sidecar/powerQuery';
+import { RUN_MACRO_TOOL_NAMES } from './sidecar/runMacro';
 
 describe('工具注册表', () => {
   it('注册了阶段一约定的核心工具', () => {
     const names = all().map((t) => t.name).sort();
     expect(names).toEqual([
+      'add_slide',
+      'add_text_box',
       'create_chart',
       'format_cells',
+      'get_presentation_overview',
       'get_selection',
       'get_workbook_overview',
       'list_macros',
       'list_queries',
       'modify_structure',
       'read_range',
+      'read_slide',
       'refresh_query',
       'run_macro',
       'run_script',
@@ -75,6 +83,62 @@ describe('工具注册表', () => {
     const defs = toToolDefs(new Set(['run_script']));
     expect(defs.find((d) => d.name === 'run_script')).toBeUndefined();
     expect(defs.length).toBe(all().length - 1);
+  });
+});
+
+/**
+ * 按宿主过滤用的名字清单（EXCEL_TOOL_NAMES / POWERPOINT_TOOL_NAMES）。
+ *
+ * 【这几条断言防的是什么】：ChatPane 按这两份名单往 disabled 集合里塞
+ * 名字，名单里写错一个字或者漏加一个新工具，表现是"某个工具在错误的
+ * 宿主上也能被模型看到、点了才报错"，或者"某个工具在对的宿主上也被
+ * 误摘掉"——两种都不会让任何编译或运行时检查变红，只有对着注册表
+ * 逐条核对名字才能抓到。
+ */
+describe('按宿主过滤的工具名单', () => {
+  it('EXCEL_TOOL_NAMES 里的每个名字都确实注册过', () => {
+    for (const n of EXCEL_TOOL_NAMES) {
+      expect(get(n), `EXCEL_TOOL_NAMES 里的 "${n}" 没有对应的已注册工具`).toBeDefined();
+    }
+  });
+
+  it('POWERPOINT_TOOL_NAMES 里的每个名字都确实注册过', () => {
+    for (const n of POWERPOINT_TOOL_NAMES) {
+      expect(get(n), `POWERPOINT_TOOL_NAMES 里的 "${n}" 没有对应的已注册工具`).toBeDefined();
+    }
+  });
+
+  it('Excel 系（含 sidecar）和 PowerPoint 系的名单不重叠', () => {
+    const excelSide = new Set<string>([...EXCEL_TOOL_NAMES, ...SIDECAR_TOOL_NAMES, ...RUN_MACRO_TOOL_NAMES]);
+    for (const n of POWERPOINT_TOOL_NAMES) {
+      expect(excelSide.has(n), `"${n}" 同时出现在 Excel 系和 PowerPoint 系名单里`).toBe(false);
+    }
+  });
+
+  it('所有已注册工具都被两份名单之一覆盖到——不能有工具"两边都不摘"', () => {
+    // 覆盖不到的后果是：这个工具在 PPT 上也会出现在模型可见的工具列表里，
+    // 点了才报错，而不是从一开始就静默消失。
+    const covered = new Set<string>([
+      ...EXCEL_TOOL_NAMES,
+      ...SIDECAR_TOOL_NAMES,
+      ...RUN_MACRO_TOOL_NAMES,
+      ...POWERPOINT_TOOL_NAMES,
+      'run_script', // Excel 专属但由 settings.enableRunScript 单独控制，不在按宿主的名单里
+    ]);
+    for (const t of all()) {
+      expect(covered.has(t.name), `"${t.name}" 没有被任何按宿主过滤的名单覆盖到`).toBe(true);
+    }
+  });
+
+  it('PowerPoint 的写工具都标成 mutate:structure——没有自定义快照系统撑腰，' +
+    '不能承诺 mutate:content 那种"自动建快照、可撤销"，唯一的安全边界是强制确认', () => {
+    expect(get('add_text_box')!.policy).toBe('mutate:structure');
+    expect(get('add_slide')!.policy).toBe('mutate:structure');
+  });
+
+  it('PowerPoint 的读工具不标成会改动', () => {
+    expect(get('get_presentation_overview')!.policy).toBe('read');
+    expect(get('read_slide')!.policy).toBe('read');
   });
 });
 

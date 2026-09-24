@@ -9,5 +9,7 @@ import './excel/chart';
 import './sandbox/runScript';
 import './sidecar/powerQuery';
 import './sidecar/runMacro';
+import './powerpoint/read';
+import './powerpoint/write';
 
 export * from './registry';

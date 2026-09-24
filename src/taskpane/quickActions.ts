@@ -243,3 +243,56 @@ export const QUICK_ACTIONS: QuickAction[] = [
 export function actionsByGroup(group: string): QuickAction[] {
   return QUICK_ACTIONS.filter((a) => a.group === group);
 }
+
+//==============================================================================
+// PPT AI 版预置提示词
+//
+// 数量比 Excel 那 15 条少很多——PPT AI 的工具集本身也小得多（骨架阶段
+// 只有读+基础写四个工具），预置提示词的丰富度应该跟工具能力匹配，
+// 硬凑一堆做不到的场景只会让用户点了发现"AI 说做不到"。
+//==============================================================================
+
+export const PPT_QUICK_ACTION_GROUPS = ['体检与梳理', '内容调整'] as const;
+
+export const PPT_QUICK_ACTIONS: QuickAction[] = [
+  {
+    id: 'ppt-audit',
+    label: '这份演示文稿有什么问题？',
+    prompt:
+      '通读整份演示文稿，检查逻辑是否连贯、有没有文字过多的页、' +
+      '标题和内容是否对得上。先列出发现的问题，不要改动任何内容。',
+    group: '体检与梳理',
+    mutates: false,
+  },
+  {
+    id: 'ppt-outline',
+    label: '帮我理一下这份的逻辑结构',
+    prompt:
+      '按页列出每一页在讲什么（一句话概括），整体看下来逻辑顺不顺、' +
+      '有没有跳跃或重复的地方。只分析，不要改动内容。',
+    group: '体检与梳理',
+    mutates: false,
+  },
+  {
+    id: 'ppt-trim',
+    label: '这页文字太多，帮我精简',
+    prompt:
+      '（先告诉我是第几页）这一页文字太多了，帮我精简成更适合演示的要点式表达，' +
+      '保留核心信息，去掉冗余描述。改之前先告诉我你打算怎么改。',
+    group: '内容调整',
+    mutates: true,
+  },
+  {
+    id: 'ppt-add-slide',
+    label: '帮我加一页',
+    prompt:
+      '（描述这一页要讲什么）请帮我在末尾新增一页幻灯片，' +
+      '包含一个合适的标题和几条要点。',
+    group: '内容调整',
+    mutates: true,
+  },
+];
+
+export function pptActionsByGroup(group: string): QuickAction[] {
+  return PPT_QUICK_ACTIONS.filter((a) => a.group === group);
+}

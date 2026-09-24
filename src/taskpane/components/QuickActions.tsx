@@ -1,4 +1,5 @@
-import { QUICK_ACTIONS, QUICK_ACTION_GROUPS } from '../quickActions';
+import { QUICK_ACTIONS, QUICK_ACTION_GROUPS, PPT_QUICK_ACTIONS, PPT_QUICK_ACTION_GROUPS } from '../quickActions';
+import { getHost } from '../../store/host';
 
 /**
  * 预置提示词面板。
@@ -12,10 +13,16 @@ import { QUICK_ACTIONS, QUICK_ACTION_GROUPS } from '../quickActions';
  * 改结构强制确认），这里的标注只是让人心里有数。
  */
 export function QuickActions({ onPick }: { onPick: (prompt: string) => void }) {
+  // host=unknown 时按 Excel 版兜底，理由同 ChatPane 的标题文案——
+  // 这份列表历史上只服务过 Excel。
+  const isPpt = getHost() === 'powerpoint';
+  const groups = isPpt ? PPT_QUICK_ACTION_GROUPS : QUICK_ACTION_GROUPS;
+  const actions = isPpt ? PPT_QUICK_ACTIONS : QUICK_ACTIONS;
+
   return (
     <div className="space-y-3 text-left">
-      {QUICK_ACTION_GROUPS.map((group) => {
-        const items = QUICK_ACTIONS.filter((a) => a.group === group);
+      {groups.map((group) => {
+        const items = actions.filter((a) => a.group === group);
         if (!items.length) return null;
         return (
           <div key={group} className="space-y-1">
@@ -31,9 +38,13 @@ export function QuickActions({ onPick }: { onPick: (prompt: string) => void }) {
                 {a.mutates && (
                   <span
                     className="shrink-0 rounded bg-amber-50 px-1 py-0.5 text-[10px] text-amber-700"
-                    title="这一条会改动表格内容。改动可以撤销，改结构前 AI 会先问你。"
+                    title={
+                      isPpt
+                        ? '这一条会改动演示文稿内容。改结构（如新增页）前 AI 会先问你。'
+                        : '这一条会改动表格内容。改动可以撤销，改结构前 AI 会先问你。'
+                    }
                   >
-                    会改表
+                    {isPpt ? '会改动' : '会改表'}
                   </span>
                 )}
               </button>

@@ -8,8 +8,11 @@ import { SettingsPage } from './SettingsPage';
 import { QuickActions } from './QuickActions';
 import { onUpdateAvailable, startUpdatePolling } from '../version';
 import { getSidecarStatus } from '../../store/sidecar';
+import { getHost } from '../../store/host';
 import { SIDECAR_TOOL_NAMES } from '../../tools/sidecar/powerQuery';
 import { RUN_MACRO_TOOL_NAMES } from '../../tools/sidecar/runMacro';
+import { EXCEL_TOOL_NAMES } from '../../tools/excel';
+import { POWERPOINT_TOOL_NAMES } from '../../tools/powerpoint';
 
 export function ChatPane() {
   const session = useSession();
@@ -30,6 +33,13 @@ export function ChatPane() {
   }, [session.messages]);
 
   const configured = Boolean(settings.baseUrl && settings.model);
+
+  // 标题/说明文字按宿主换措辞——host=unknown（浏览器裸调等）时按 Excel
+  // 文案兜底，理由同 agent/loop.ts 的 safeContextBlock：这段文案历史上
+  // 只服务过 Excel，不认识的宿主突然不认它会让现有部署看着奇怪。
+  const host = getHost();
+  const title = host === 'powerpoint' ? 'PPT AI 助手' : 'Excel AI 助手';
+  const docWord = host === 'powerpoint' ? '当前演示文稿' : '当前工作簿';
 
   async function send() {
     const text = input.trim();
@@ -55,6 +65,19 @@ export function ChatPane() {
     if (!getSidecarStatus().available) {
       for (const n of SIDECAR_TOOL_NAMES) disabled.add(n);
       for (const n of RUN_MACRO_TOOL_NAMES) disabled.add(n);
+    }
+
+    // 按宿主摘掉不匹配的那一套工具——Excel 工具调 Excel.run，PPT 工具调
+    // PowerPoint.run，装错宿主直接报错，模型不该看到它调不动的工具。
+    // sidecar 那两套（Power Query / VBA 宏）也是 Excel 专属概念，
+    // host=powerpoint 时一并摘掉，即使 sidecar 本身探测到可用。
+    // 复用组件顶层已经算过的 host，不用再探测一次。
+    if (host === 'powerpoint') {
+      for (const n of EXCEL_TOOL_NAMES) disabled.add(n);
+      for (const n of SIDECAR_TOOL_NAMES) disabled.add(n);
+      for (const n of RUN_MACRO_TOOL_NAMES) disabled.add(n);
+    } else {
+      for (const n of POWERPOINT_TOOL_NAMES) disabled.add(n);
     }
 
     try {
@@ -150,7 +173,7 @@ export function ChatPane() {
   return (
     <div className="relative flex h-full flex-col bg-neutral-50">
       <header className="flex items-center justify-between border-b border-neutral-200 bg-white px-3 py-2">
-        <span className="text-sm font-semibold text-neutral-800">Excel AI 助手</span>
+        <span className="text-sm font-semibold text-neutral-800">{title}</span>
         <div className="flex items-center gap-2 text-xs">
           {session.messages.length > 0 && (
             <button onClick={session.reset} className="text-neutral-500 hover:text-neutral-800">
@@ -194,7 +217,7 @@ export function ChatPane() {
           <div className="space-y-3 pt-6 text-center">
             <p className="text-xs text-neutral-500">
               {configured
-                ? '用自然语言描述你想做的事，AI 会直接操作当前工作簿。'
+                ? `用自然语言描述你想做的事，AI 会直接操作${docWord}。`
                 : '还没有配置模型，先去设置页填写接口地址和模型名称。'}
             </p>
             {configured && (
@@ -262,7 +285,9 @@ export function ChatPane() {
         />
         <div className="mt-1.5 flex items-center justify-between">
           <span className="text-[11px] text-neutral-400">
-            插件的改动无法用 Ctrl+Z 撤销，请用操作卡片上的「撤销」
+            {host === 'powerpoint'
+              ? '插件的改动大概率也无法用 Ctrl+Z 撤销，改结构前 AI 会先问你'
+              : '插件的改动无法用 Ctrl+Z 撤销，请用操作卡片上的「撤销」'}
           </span>
           {session.running ? (
             <button

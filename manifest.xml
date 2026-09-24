@@ -30,12 +30,14 @@
 
   <Hosts>
     <Host Name="Workbook"/>
+    <Host Name="Presentation"/>
   </Hosts>
 
   <!-- 基线 1.1，高版本能力在运行时用 isSetSupported 探测，保证 Mac/Web/旧版也能装 -->
   <Requirements>
     <Sets DefaultMinVersion="1.1">
       <Set Name="ExcelApi" MinVersion="1.1"/>
+      <Set Name="PowerPointApi" MinVersion="1.1"/>
     </Sets>
   </Requirements>
 
@@ -107,6 +109,52 @@
           </ExtensionPoint>
         </DesktopFormFactor>
       </Host>
+
+      <!-- PPT AI：同一个任务窗格 bundle，运行时按 Office.context.host 分支
+           工具列表（见 src/store/host.ts）。只留"AI 对话"这一个入口——
+           "问选区"在 PPT 里对应的是选中的形状/文字，和 Excel 的区域选区
+           不是一回事，值得单独设计，这一轮先不做。 -->
+      <Host xsi:type="Presentation">
+        <DesktopFormFactor>
+          <GetStarted>
+            <Title resid="PptGetStarted.Title"/>
+            <Description resid="GetStarted.Description"/>
+            <LearnMoreUrl resid="GetStarted.LearnMoreUrl"/>
+          </GetStarted>
+
+          <FunctionFile resid="Commands.Url"/>
+
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <OfficeTab id="TabHome">
+              <Group id="PptAI.Group">
+                <Label resid="Group.Label"/>
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16x16"/>
+                  <bt:Image size="32" resid="Icon.32x32"/>
+                  <bt:Image size="80" resid="Icon.80x80"/>
+                </Icon>
+
+                <Control xsi:type="Button" id="PptAI.OpenPane">
+                  <Label resid="OpenPane.Label"/>
+                  <Supertip>
+                    <Title resid="OpenPane.Label"/>
+                    <Description resid="PptOpenPane.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>PptAI.Taskpane</TaskpaneId>
+                    <SourceLocation resid="Taskpane.Url"/>
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
     </Hosts>
 
     <Resources>
@@ -125,10 +173,12 @@
         <bt:String id="OpenPane.Label" DefaultValue="AI 对话"/>
         <bt:String id="AskSelection.Label" DefaultValue="问选区"/>
         <bt:String id="GetStarted.Title" DefaultValue="Excel AI 助手已就绪"/>
+        <bt:String id="PptGetStarted.Title" DefaultValue="PPT AI 助手已就绪"/>
       </bt:ShortStrings>
       <bt:LongStrings>
         <bt:String id="OpenPane.Tooltip" DefaultValue="打开对话面板，用自然语言让 AI 操作当前工作簿。"/>
         <bt:String id="AskSelection.Tooltip" DefaultValue="打开对话面板并带上当前选区，直接就选中的数据提问。"/>
+        <bt:String id="PptOpenPane.Tooltip" DefaultValue="打开对话面板，用自然语言让 AI 操作当前演示文稿。"/>
         <bt:String id="GetStarted.Description" DefaultValue="点击「开始」选项卡上的「AI 对话」按钮，先在设置页配置你的大模型，然后开始对话。"/>
       </bt:LongStrings>
     </Resources>

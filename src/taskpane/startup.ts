@@ -1,5 +1,6 @@
 import { provision, applyRibbonVisibility } from '../store/provisioning';
 import { probeSidecar, setSidecarStatus, type SidecarStatus } from '../store/sidecar';
+import { detectHost, setHost, type HostKind } from '../store/host';
 
 /**
  * 任务窗格的启动链路。
@@ -23,6 +24,8 @@ export interface StartupResult {
   ribbonUpdated: boolean;
   /** 本机 sidecar 的状态。没装这个组件时 available=false，这是正常情况 */
   sidecar: SidecarStatus;
+  /** 当前运行在哪个 Office 宿主里，工具列表据此过滤 */
+  host: HostKind;
 }
 
 export async function runStartup(): Promise<StartupResult> {
@@ -30,6 +33,11 @@ export async function runStartup(): Promise<StartupResult> {
 
   // 【顺序不能反】：先问到配置，才知道按钮该不该置灰。
   const ribbonUpdated = await applyRibbonVisibility(r.visibility);
+
+  // 存下来供工具列表按宿主过滤使用。探测本身不该抛——detectHost 已经
+  // 自己兜了异常，这里不需要再包一层 try。
+  const host = detectHost();
+  setHost(host);
 
   // 探一次本机的 sidecar。
   //
@@ -50,5 +58,5 @@ export async function runStartup(): Promise<StartupResult> {
   // 默认的"不可用"，sidecar 类工具装了也不会出现，而且不会有任何报错。
   setSidecarStatus(sidecar);
 
-  return { visibility: r.visibility, mode: r.mode, ribbonUpdated, sidecar };
+  return { visibility: r.visibility, mode: r.mode, ribbonUpdated, sidecar, host };
 }
