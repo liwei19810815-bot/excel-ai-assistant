@@ -33,13 +33,12 @@
     <Host Name="Presentation"/>
   </Hosts>
 
-  <!-- 基线 1.1，高版本能力在运行时用 isSetSupported 探测，保证 Mac/Web/旧版也能装 -->
-  <Requirements>
-    <Sets DefaultMinVersion="1.1">
-      <Set Name="ExcelApi" MinVersion="1.1"/>
-      <Set Name="PowerPointApi" MinVersion="1.1"/>
-    </Sets>
-  </Requirements>
+  <!-- 顶层 Requirements 是"装的时候必须满足"的单一门槛，Excel 和 PowerPoint
+       各自的 API 集互不包含——同时要求两者会导致两边都装不上（Codex 验收
+       发现的阻塞问题）。真正的按宿主要求放到下面 VersionOverrides 里
+       每个 Host 各自的 Requirements 块里；顶层不再声明任何 Set，只靠
+       TaskPaneApp 本身的 Office 版本门槛，高版本能力仍在运行时用
+       isSetSupported 探测，保证 Mac/Web/旧版也能装 -->
 
   <DefaultSettings>
     <SourceLocation DefaultValue="https://localhost:3000/src/taskpane/index.html"/>
@@ -51,6 +50,11 @@
   <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
     <Hosts>
       <Host xsi:type="Workbook">
+        <Requirements>
+          <Sets DefaultMinVersion="1.1">
+            <Set Name="ExcelApi" MinVersion="1.1"/>
+          </Sets>
+        </Requirements>
         <DesktopFormFactor>
           <GetStarted>
             <Title resid="GetStarted.Title"/>
@@ -115,6 +119,11 @@
            "问选区"在 PPT 里对应的是选中的形状/文字，和 Excel 的区域选区
            不是一回事，值得单独设计，这一轮先不做。 -->
       <Host xsi:type="Presentation">
+        <Requirements>
+          <Sets DefaultMinVersion="1.1">
+            <Set Name="PowerPointApi" MinVersion="1.1"/>
+          </Sets>
+        </Requirements>
         <DesktopFormFactor>
           <GetStarted>
             <Title resid="PptGetStarted.Title"/>

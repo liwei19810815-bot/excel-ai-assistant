@@ -138,6 +138,18 @@ async function executeCall(
     return;
   }
 
+  // 光把禁用工具从发给模型的列表里摘掉还不够——模型可能因为历史消息、
+  // 幻觉等原因仍然吐出一个被禁用工具的调用。真正的边界必须落在执行前，
+  // 不能只靠"模型大概率看不到就不会调"这种软约束（Codex 验收发现的问题）。
+  if (opts.disabledTools?.has(call.name)) {
+    pushToolResult(
+      history,
+      call.id,
+      `错误：工具 ${call.name} 在当前宿主/配置下不可用，已拒绝执行。`,
+    );
+    return;
+  }
+
   // 模型可能生成不完整或带包裹的 JSON
   let args: unknown;
   try {
