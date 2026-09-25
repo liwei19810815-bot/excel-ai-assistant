@@ -33,12 +33,15 @@
     <Host Name="Presentation"/>
   </Hosts>
 
-  <!-- 顶层 Requirements 是"装的时候必须满足"的单一门槛，Excel 和 PowerPoint
-       各自的 API 集互不包含——同时要求两者会导致两边都装不上（Codex 验收
-       发现的阻塞问题）。真正的按宿主要求放到下面 VersionOverrides 里
-       每个 Host 各自的 Requirements 块里；顶层不再声明任何 Set，只靠
-       TaskPaneApp 本身的 Office 版本门槛，高版本能力仍在运行时用
-       isSetSupported 探测，保证 Mac/Web/旧版也能装 -->
+  <!-- 不声明顶层 Requirements/Sets：Excel 和 PowerPoint 各自的 API 集
+       互不包含，写死任何一个都会挡住另一边装不上（Codex 验收发现的
+       阻塞问题）。曾经尝试把要求分别放进 VersionOverrides 里各个
+       Host 块自己的 Requirements 里，但 office-addin-manifest validate
+       报错：Host 的合法子元素只有 Runtimes/AllFormFactors/
+       DesktopFormFactor，不允许 Requirements（这也是 Codex 复审时
+       用真实校验工具跑出来发现的）。所以两边都不做 manifest 层的版本
+       门槛，完全依赖运行时 isSetSupported/requireApi 探测降级
+       （src/excel/coordinator.ts、src/powerpoint/coordinator.ts 已有）-->
 
   <DefaultSettings>
     <SourceLocation DefaultValue="https://localhost:3000/src/taskpane/index.html"/>
@@ -50,11 +53,6 @@
   <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
     <Hosts>
       <Host xsi:type="Workbook">
-        <Requirements>
-          <Sets DefaultMinVersion="1.1">
-            <Set Name="ExcelApi" MinVersion="1.1"/>
-          </Sets>
-        </Requirements>
         <DesktopFormFactor>
           <GetStarted>
             <Title resid="GetStarted.Title"/>
@@ -119,11 +117,6 @@
            "问选区"在 PPT 里对应的是选中的形状/文字，和 Excel 的区域选区
            不是一回事，值得单独设计，这一轮先不做。 -->
       <Host xsi:type="Presentation">
-        <Requirements>
-          <Sets DefaultMinVersion="1.1">
-            <Set Name="PowerPointApi" MinVersion="1.1"/>
-          </Sets>
-        </Requirements>
         <DesktopFormFactor>
           <GetStarted>
             <Title resid="PptGetStarted.Title"/>
