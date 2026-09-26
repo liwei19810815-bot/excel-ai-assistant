@@ -41,7 +41,7 @@ register({
     '会改动文档内容，大概率无法用 Ctrl+Z 撤销，执行前会强制你和用户确认。',
   policy: 'mutate:structure',
   schema: z.object({
-    find: z.string().min(1).describe('要查找的文字，最长 255 字符'),
+    find: z.string().min(1).max(255).describe('要查找的文字，最长 255 字符'),
     replace: z.string().describe('替换成的文字，可以是空字符串（等于删除）'),
   }),
   summarize: (a) => `全文替换「${a.find}」→「${a.replace}」`,
