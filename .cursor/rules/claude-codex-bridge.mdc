@@ -1,0 +1,16 @@
+---
+description: Claude 与 Codex 的自动复审和共享仓库交接协议
+alwaysApply: true
+---
+
+# Claude ↔ Codex 协作协议
+
+本项目使用 `review/` 文件协议进行自动复审：
+
+- Claude 提交代码后运行 `npm run review:run -- --commit HEAD`。
+- 请求写入 `review/request.json`，结果写入 `review/result.json`。
+- 结果必须绑定 requestId 和 commit；旧结果不得复用。
+- Codex 只读复审，不修改、提交或推送代码。
+- 只有 `status=passed` 才允许推送；`failed` 必须根据 findings 修复。
+- 模型使用 `CODEX_REVIEW_MODELS` 回退链；调用失败必须记录为 error。
+
