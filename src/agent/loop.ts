@@ -2,6 +2,7 @@ import type { ChatMessage, Provider, ToolCall } from '../llm/types';
 import { get as getTool, toToolDefs, truncate, type ConfirmPayload } from '../tools';
 import { buildBlueprint, renderBlueprint } from '../excel/blueprint';
 import { buildPptBlueprint, renderPptBlueprint } from '../powerpoint/blueprint';
+import { buildWordBlueprint, renderWordBlueprint } from '../word/blueprint';
 import { getHost } from '../store/host';
 import { buildSystemPrompt } from './systemPrompt';
 
@@ -255,6 +256,13 @@ async function safeContextBlock(): Promise<string> {
       return renderPptBlueprint(await buildPptBlueprint());
     } catch (e) {
       return `（无法读取演示文稿结构：${describeError(e)}。需要时请主动调用工具读取。）`;
+    }
+  }
+  if (host === 'word') {
+    try {
+      return renderWordBlueprint(await buildWordBlueprint());
+    } catch (e) {
+      return `（无法读取文档结构：${describeError(e)}。需要时请主动调用工具读取。）`;
     }
   }
   try {

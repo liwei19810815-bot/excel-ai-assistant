@@ -296,3 +296,56 @@ export const PPT_QUICK_ACTIONS: QuickAction[] = [
 export function pptActionsByGroup(group: string): QuickAction[] {
   return PPT_QUICK_ACTIONS.filter((a) => a.group === group);
 }
+
+//==============================================================================
+// Word AI 版预置提示词
+//
+// 和 PPT 同一个理由：工具集小（骨架阶段只有读段落 + 插入段落 + 全文
+// 替换三个能改动的能力，加一个只读总览），预置提示词数量跟着收窄，
+// 不硬凑做不到的场景。
+//==============================================================================
+
+export const WORD_QUICK_ACTION_GROUPS = ['体检与梳理', '内容调整'] as const;
+
+export const WORD_QUICK_ACTIONS: QuickAction[] = [
+  {
+    id: 'word-audit',
+    label: '这份文档有什么问题？',
+    prompt:
+      '通读整篇文档，检查逻辑是否连贯、有没有重复或矛盾的地方、' +
+      '段落之间衔接是否顺畅。先列出发现的问题，不要改动任何内容。',
+    group: '体检与梳理',
+    mutates: false,
+  },
+  {
+    id: 'word-outline',
+    label: '帮我理一下这份的逻辑结构',
+    prompt:
+      '按段落列出每一段在讲什么（一句话概括），整体看下来逻辑顺不顺、' +
+      '有没有跳跃或重复的地方。只分析，不要改动内容。',
+    group: '体检与梳理',
+    mutates: false,
+  },
+  {
+    id: 'word-replace',
+    label: '帮我统一改一个说法',
+    prompt:
+      '（告诉我要查找和替换的文字）请在全文范围内把指定的文字统一替换掉，' +
+      '改之前先告诉我一共匹配到几处。',
+    group: '内容调整',
+    mutates: true,
+  },
+  {
+    id: 'word-add-paragraph',
+    label: '帮我在末尾加一段',
+    prompt:
+      '（描述这一段要讲什么）请帮我在文档末尾新增一段，' +
+      '内容要和前文衔接自然。',
+    group: '内容调整',
+    mutates: true,
+  },
+];
+
+export function wordActionsByGroup(group: string): QuickAction[] {
+  return WORD_QUICK_ACTIONS.filter((a) => a.group === group);
+}

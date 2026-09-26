@@ -31,6 +31,7 @@
   <Hosts>
     <Host Name="Workbook"/>
     <Host Name="Presentation"/>
+    <Host Name="Document"/>
   </Hosts>
 
   <!-- 不声明顶层 Requirements/Sets：Excel 和 PowerPoint 各自的 API 集
@@ -157,6 +158,51 @@
           </ExtensionPoint>
         </DesktopFormFactor>
       </Host>
+
+      <!-- Word AI：同一个任务窗格 bundle，运行时按 Office.context.host
+           分支工具列表（见 src/store/host.ts）。只留"AI 对话"这一个
+           入口，和 PPT 那份一样不做"问选区"。 -->
+      <Host xsi:type="Document">
+        <DesktopFormFactor>
+          <GetStarted>
+            <Title resid="WordGetStarted.Title"/>
+            <Description resid="GetStarted.Description"/>
+            <LearnMoreUrl resid="GetStarted.LearnMoreUrl"/>
+          </GetStarted>
+
+          <FunctionFile resid="Commands.Url"/>
+
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <OfficeTab id="TabHome">
+              <Group id="WordAI.Group">
+                <Label resid="Group.Label"/>
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16x16"/>
+                  <bt:Image size="32" resid="Icon.32x32"/>
+                  <bt:Image size="80" resid="Icon.80x80"/>
+                </Icon>
+
+                <Control xsi:type="Button" id="WordAI.OpenPane">
+                  <Label resid="OpenPane.Label"/>
+                  <Supertip>
+                    <Title resid="OpenPane.Label"/>
+                    <Description resid="WordOpenPane.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>WordAI.Taskpane</TaskpaneId>
+                    <SourceLocation resid="Taskpane.Url"/>
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
     </Hosts>
 
     <Resources>
@@ -176,11 +222,13 @@
         <bt:String id="AskSelection.Label" DefaultValue="问选区"/>
         <bt:String id="GetStarted.Title" DefaultValue="Excel AI 助手已就绪"/>
         <bt:String id="PptGetStarted.Title" DefaultValue="PPT AI 助手已就绪"/>
+        <bt:String id="WordGetStarted.Title" DefaultValue="Word AI 助手已就绪"/>
       </bt:ShortStrings>
       <bt:LongStrings>
         <bt:String id="OpenPane.Tooltip" DefaultValue="打开对话面板，用自然语言让 AI 操作当前工作簿。"/>
         <bt:String id="AskSelection.Tooltip" DefaultValue="打开对话面板并带上当前选区，直接就选中的数据提问。"/>
         <bt:String id="PptOpenPane.Tooltip" DefaultValue="打开对话面板，用自然语言让 AI 操作当前演示文稿。"/>
+        <bt:String id="WordOpenPane.Tooltip" DefaultValue="打开对话面板，用自然语言让 AI 操作当前文档。"/>
         <bt:String id="GetStarted.Description" DefaultValue="点击「开始」选项卡上的「AI 对话」按钮，先在设置页配置你的大模型，然后开始对话。"/>
       </bt:LongStrings>
     </Resources>

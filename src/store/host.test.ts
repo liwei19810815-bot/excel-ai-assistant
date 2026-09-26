@@ -27,9 +27,17 @@ describe('detectHost', () => {
     expect(detectHost()).toBe('powerpoint');
   });
 
-  it('host 是别的宿主（如 Word）时返回 unknown，不是乱猜', () => {
+  it('Office.context.host 匹配 Word 时返回 word', () => {
     (globalThis as { Office?: unknown }).Office = {
       context: { host: 'z' },
+      HostType: { Excel: 'x', PowerPoint: 'y', Word: 'z' },
+    };
+    expect(detectHost()).toBe('word');
+  });
+
+  it('host 是完全不认识的宿主时返回 unknown，不是乱猜', () => {
+    (globalThis as { Office?: unknown }).Office = {
+      context: { host: 'q' },
       HostType: { Excel: 'x', PowerPoint: 'y', Word: 'z' },
     };
     expect(detectHost()).toBe('unknown');

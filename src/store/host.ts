@@ -15,7 +15,7 @@
  * 猜错了模型会在一个装错的工具上尝试，报错还看不出原因。
  */
 
-export type HostKind = 'excel' | 'powerpoint' | 'unknown';
+export type HostKind = 'excel' | 'powerpoint' | 'word' | 'unknown';
 
 /**
  * 读 Office.context.host，对照 Office.HostType 判断当前宿主。
@@ -29,6 +29,7 @@ export function detectHost(): HostKind {
     const host = Office?.context?.host;
     if (host === Office.HostType.Excel) return 'excel';
     if (host === Office.HostType.PowerPoint) return 'powerpoint';
+    if (host === Office.HostType.Word) return 'word';
     return 'unknown';
   } catch {
     return 'unknown';

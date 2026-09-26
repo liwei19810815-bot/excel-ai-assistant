@@ -6,6 +6,9 @@ import {
   PPT_QUICK_ACTIONS,
   PPT_QUICK_ACTION_GROUPS,
   pptActionsByGroup,
+  WORD_QUICK_ACTIONS,
+  WORD_QUICK_ACTION_GROUPS,
+  wordActionsByGroup,
 } from './quickActions';
 
 /**
@@ -114,6 +117,57 @@ describe('PPT 预置提示词', () => {
 
   it('只读条目的 prompt 里要明确写出"不要改"', () => {
     for (const a of PPT_QUICK_ACTIONS.filter((x) => !x.mutates)) {
+      expect(
+        /不要改|不改动|先不要|只分析|只解释|不要直接/.test(a.prompt),
+        `${a.id} 标成只读，但 prompt 没告诉模型不要改动`,
+      ).toBe(true);
+    }
+  });
+});
+
+describe('Word 预置提示词', () => {
+  it('id 不能重复', () => {
+    const ids = WORD_QUICK_ACTIONS.map((a) => a.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('id 和 Excel/PPT 版的不重叠，避免几套列表混着用时冲突', () => {
+    const otherIds = new Set([
+      ...QUICK_ACTIONS.map((a) => a.id),
+      ...PPT_QUICK_ACTIONS.map((a) => a.id),
+    ]);
+    for (const a of WORD_QUICK_ACTIONS) {
+      expect(otherIds.has(a.id), `${a.id} 和 Excel/PPT 版的 id 撞了`).toBe(false);
+    }
+  });
+
+  it('每条都必须有 label 和 prompt', () => {
+    for (const a of WORD_QUICK_ACTIONS) {
+      expect(a.label.trim(), `${a.id} 的 label`).not.toBe('');
+      expect(a.prompt.trim(), `${a.id} 的 prompt`).not.toBe('');
+    }
+  });
+
+  it('每条的分组都必须是已声明的分组之一', () => {
+    for (const a of WORD_QUICK_ACTIONS) {
+      expect(WORD_QUICK_ACTION_GROUPS, `${a.id} 的分组「${a.group}」`).toContain(a.group);
+    }
+  });
+
+  it('每个分组都至少有一条，不能出现空分组', () => {
+    for (const g of WORD_QUICK_ACTION_GROUPS) {
+      expect(wordActionsByGroup(g).length, `分组「${g}」`).toBeGreaterThan(0);
+    }
+  });
+
+  it('prompt 要足够具体，不能是一句含糊的指令', () => {
+    for (const a of WORD_QUICK_ACTIONS) {
+      expect(a.prompt.length, `${a.id} 的 prompt 太短`).toBeGreaterThan(20);
+    }
+  });
+
+  it('只读条目的 prompt 里要明确写出"不要改"', () => {
+    for (const a of WORD_QUICK_ACTIONS.filter((x) => !x.mutates)) {
       expect(
         /不要改|不改动|先不要|只分析|只解释|不要直接/.test(a.prompt),
         `${a.id} 标成只读，但 prompt 没告诉模型不要改动`,

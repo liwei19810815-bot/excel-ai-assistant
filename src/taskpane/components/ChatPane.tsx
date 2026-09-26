@@ -13,6 +13,7 @@ import { SIDECAR_TOOL_NAMES } from '../../tools/sidecar/powerQuery';
 import { RUN_MACRO_TOOL_NAMES } from '../../tools/sidecar/runMacro';
 import { EXCEL_TOOL_NAMES } from '../../tools/excel';
 import { POWERPOINT_TOOL_NAMES } from '../../tools/powerpoint';
+import { WORD_TOOL_NAMES } from '../../tools/word';
 
 export function ChatPane() {
   const session = useSession();
@@ -38,8 +39,8 @@ export function ChatPane() {
   // 文案兜底，理由同 agent/loop.ts 的 safeContextBlock：这段文案历史上
   // 只服务过 Excel，不认识的宿主突然不认它会让现有部署看着奇怪。
   const host = getHost();
-  const title = host === 'powerpoint' ? 'PPT AI 助手' : 'Excel AI 助手';
-  const docWord = host === 'powerpoint' ? '当前演示文稿' : '当前工作簿';
+  const title = host === 'powerpoint' ? 'PPT AI 助手' : host === 'word' ? 'Word AI 助手' : 'Excel AI 助手';
+  const docWord = host === 'powerpoint' ? '当前演示文稿' : host === 'word' ? '当前文档' : '当前工作簿';
 
   async function send() {
     const text = input.trim();
@@ -68,16 +69,24 @@ export function ChatPane() {
     }
 
     // 按宿主摘掉不匹配的那一套工具——Excel 工具调 Excel.run，PPT 工具调
-    // PowerPoint.run，装错宿主直接报错，模型不该看到它调不动的工具。
-    // sidecar 那两套（Power Query / VBA 宏）也是 Excel 专属概念，
-    // host=powerpoint 时一并摘掉，即使 sidecar 本身探测到可用。
-    // 复用组件顶层已经算过的 host，不用再探测一次。
-    if (host === 'powerpoint') {
+    // PowerPoint.run，Word 工具调 Word.run，装错宿主直接报错，模型不该
+    // 看到它调不动的工具。sidecar 那两套（Power Query / VBA 宏）也是
+    // Excel 专属概念，非 Excel 宿主时一并摘掉，即使 sidecar 本身探测到
+    // 可用。复用组件顶层已经算过的 host，不用再探测一次。
+    // 【host=unknown 按 excel 兜底】：和标题/文案那处兜底同一个理由，
+    // 浏览器裸调等场景之前一直是当 Excel 用的，不能因为加了 Word
+    // 分支就悄悄改变这个默认行为。
+    const effectiveHost = host === 'unknown' ? 'excel' : host;
+    if (effectiveHost !== 'excel') {
       for (const n of EXCEL_TOOL_NAMES) disabled.add(n);
       for (const n of SIDECAR_TOOL_NAMES) disabled.add(n);
       for (const n of RUN_MACRO_TOOL_NAMES) disabled.add(n);
-    } else {
+    }
+    if (effectiveHost !== 'powerpoint') {
       for (const n of POWERPOINT_TOOL_NAMES) disabled.add(n);
+    }
+    if (effectiveHost !== 'word') {
+      for (const n of WORD_TOOL_NAMES) disabled.add(n);
     }
 
     try {
@@ -285,7 +294,7 @@ export function ChatPane() {
         />
         <div className="mt-1.5 flex items-center justify-between">
           <span className="text-[11px] text-neutral-400">
-            {host === 'powerpoint'
+            {host === 'powerpoint' || host === 'word'
               ? '插件的改动大概率也无法用 Ctrl+Z 撤销，改结构前 AI 会先问你'
               : '插件的改动无法用 Ctrl+Z 撤销，请用操作卡片上的「撤销」'}
           </span>

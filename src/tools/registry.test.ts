@@ -3,6 +3,7 @@ import './index';
 import { all, get, toToolDefs, truncate, MAX_RESULT_CHARS } from './registry';
 import { EXCEL_TOOL_NAMES } from './excel';
 import { POWERPOINT_TOOL_NAMES } from './powerpoint';
+import { WORD_TOOL_NAMES } from './word';
 import { SIDECAR_TOOL_NAMES } from './sidecar/powerQuery';
 import { RUN_MACRO_TOOL_NAMES } from './sidecar/runMacro';
 
@@ -14,15 +15,19 @@ describe('工具注册表', () => {
       'add_text_box',
       'create_chart',
       'format_cells',
+      'get_document_overview',
       'get_presentation_overview',
       'get_selection',
       'get_workbook_overview',
+      'insert_paragraph',
       'list_macros',
       'list_queries',
       'modify_structure',
+      'read_paragraph',
       'read_range',
       'read_slide',
       'refresh_query',
+      'replace_text',
       'run_macro',
       'run_script',
       'write_cells',
@@ -108,21 +113,35 @@ describe('按宿主过滤的工具名单', () => {
     }
   });
 
-  it('Excel 系（含 sidecar）和 PowerPoint 系的名单不重叠', () => {
+  it('WORD_TOOL_NAMES 里的每个名字都确实注册过', () => {
+    for (const n of WORD_TOOL_NAMES) {
+      expect(get(n), `WORD_TOOL_NAMES 里的 "${n}" 没有对应的已注册工具`).toBeDefined();
+    }
+  });
+
+  it('Excel 系（含 sidecar）、PowerPoint 系、Word 系的名单两两不重叠', () => {
     const excelSide = new Set<string>([...EXCEL_TOOL_NAMES, ...SIDECAR_TOOL_NAMES, ...RUN_MACRO_TOOL_NAMES]);
     for (const n of POWERPOINT_TOOL_NAMES) {
       expect(excelSide.has(n), `"${n}" 同时出现在 Excel 系和 PowerPoint 系名单里`).toBe(false);
     }
+    for (const n of WORD_TOOL_NAMES) {
+      expect(excelSide.has(n), `"${n}" 同时出现在 Excel 系和 Word 系名单里`).toBe(false);
+      expect(
+        (POWERPOINT_TOOL_NAMES as readonly string[]).includes(n),
+        `"${n}" 同时出现在 PowerPoint 系和 Word 系名单里`,
+      ).toBe(false);
+    }
   });
 
-  it('所有已注册工具都被两份名单之一覆盖到——不能有工具"两边都不摘"', () => {
-    // 覆盖不到的后果是：这个工具在 PPT 上也会出现在模型可见的工具列表里，
+  it('所有已注册工具都被三份名单之一覆盖到——不能有工具"哪边都不摘"', () => {
+    // 覆盖不到的后果是：这个工具在 PPT/Word 上也会出现在模型可见的工具列表里，
     // 点了才报错，而不是从一开始就静默消失。
     const covered = new Set<string>([
       ...EXCEL_TOOL_NAMES,
       ...SIDECAR_TOOL_NAMES,
       ...RUN_MACRO_TOOL_NAMES,
       ...POWERPOINT_TOOL_NAMES,
+      ...WORD_TOOL_NAMES,
       'run_script', // Excel 专属但由 settings.enableRunScript 单独控制，不在按宿主的名单里
     ]);
     for (const t of all()) {
@@ -139,6 +158,17 @@ describe('按宿主过滤的工具名单', () => {
   it('PowerPoint 的读工具不标成会改动', () => {
     expect(get('get_presentation_overview')!.policy).toBe('read');
     expect(get('read_slide')!.policy).toBe('read');
+  });
+
+  it('Word 的写工具都标成 mutate:structure，理由同 PowerPoint——' +
+    'Office.js 加载项改动普遍不进原生撤销栈，没有证据支持这两个工具是例外', () => {
+    expect(get('insert_paragraph')!.policy).toBe('mutate:structure');
+    expect(get('replace_text')!.policy).toBe('mutate:structure');
+  });
+
+  it('Word 的读工具不标成会改动', () => {
+    expect(get('get_document_overview')!.policy).toBe('read');
+    expect(get('read_paragraph')!.policy).toBe('read');
   });
 });
 

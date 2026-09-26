@@ -11,5 +11,7 @@ import './sidecar/powerQuery';
 import './sidecar/runMacro';
 import './powerpoint/read';
 import './powerpoint/write';
+import './word/read';
+import './word/write';
 
 export * from './registry';
