@@ -16,7 +16,11 @@
     "validate": "office-addin-manifest validate manifest.xml",
     "certs": "office-addin-dev-certs install",
     "check": "node scripts/check-consistency.mjs",
-    "verify": "npm run typecheck && npm test && npm run check"
+    "verify": "npm run typecheck && npm test && npm run check",
+    "review:request": "node scripts/review/request.mjs",
+    "review:dispatch": "node scripts/review/dispatch.mjs",
+    "review:poll": "node scripts/review/poll.mjs",
+    "review:run": "node scripts/review/run.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
