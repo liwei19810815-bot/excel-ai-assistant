@@ -178,8 +178,16 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
             <input
               className={inputCls}
               type="number"
+              min="1"
+              max="200000"
               value={s.maxTokens}
-              onChange={(e) => s.set({ maxTokens: Number(e.target.value) })}
+              onChange={(e) => {
+                // min/max 只影响数字输入框的样式和箭头，不会拦住手输的值——
+                // 真事故：手滑多打一位变成 1024096，后端拒绝还只报生硬的
+                // HTTP 400，用户根本看不出是这个字段的问题。这里夹一下范围。
+                const n = Number(e.target.value);
+                s.set({ maxTokens: Number.isFinite(n) ? Math.min(200000, Math.max(1, n)) : 1 });
+              }}
             />
           </Field>
         </div>
