@@ -47,8 +47,13 @@ export function createOpenAICompatibleProvider(cfg: ProviderConfig): Provider {
 
       await throwIfNotOk(res, 'OpenAI 兼容接口');
 
-      // 流式分片里 tool_call 的 name 只在第一片出现，需按 index 累积
-      const started = new Set<number>();
+      // 流式分片里 tool_call 的 id/name 只在第一片保证出现，后续分片的
+      // tc.id 有的后端给 undefined、有的给 ""——不能每片都重新取 tc.id
+      // 拼 fallback，一旦某片给出 "" 而不是 undefined，?? 不会兜底，
+      // 参数分片就会用错误的 id 发出去，调用方 Map 里找不到对应 call
+      // 直接静默丢弃，模型的真实参数就这么没了（表现为一直"正在写入"
+      // 但从不真正落盘）。按 index 记一次 id，之后分片一律用这个 id。
+      const idByIndex = new Map<number, string>();
       let finish: 'stop' | 'tool_calls' | 'length' = 'stop';
 
       for await (const payload of readSSE(res, req.signal)) {
@@ -69,18 +74,20 @@ export function createOpenAICompatibleProvider(cfg: ProviderConfig): Provider {
 
         for (const tc of choice.delta?.tool_calls ?? []) {
           const idx = tc.index ?? 0;
-          if (!started.has(idx)) {
-            started.add(idx);
+          let id = idByIndex.get(idx);
+          if (id === undefined) {
+            id = tc.id || `call_${idx}`;
+            idByIndex.set(idx, id);
             yield {
               type: 'tool_call_start',
-              id: tc.id ?? `call_${idx}`,
+              id,
               name: tc.function?.name ?? '',
             };
           }
           if (tc.function?.arguments) {
             yield {
               type: 'tool_call_args',
-              id: tc.id ?? `call_${idx}`,
+              id,
               argsChunk: tc.function.arguments,
             };
           }

@@ -99,6 +99,48 @@ describe('OpenAI 兼容 provider', () => {
     expect(deltas.at(-1)).toEqual({ type: 'done', reason: 'tool_calls' });
   });
 
+  it('后续分片的 id 是空字符串（非 undefined）时仍归并到同一次调用', async () => {
+    // 真实事故复现：某些 OpenAI 兼容后端续传分片给 id:"" 而不是干脆不带
+    // 这个字段，此时 `tc.id ?? fallback` 不会触发兜底（?? 只认
+    // null/undefined），参数分片就会被当成另一个不存在的 call 丢弃，
+    // 模型侧看到的是"调用成功但什么都没发生"。
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        sseResponse([
+          JSON.stringify({
+            choices: [
+              {
+                delta: {
+                  tool_calls: [
+                    { index: 0, id: 'call_1', function: { name: 'write_cells', arguments: '{"ad' } },
+                  ],
+                },
+              },
+            ],
+          }),
+          JSON.stringify({
+            choices: [
+              { delta: { tool_calls: [{ index: 0, id: '', function: { arguments: 'dress":"A1"}' } }] } },
+            ],
+          }),
+          JSON.stringify({ choices: [{ delta: {}, finish_reason: 'tool_calls' }] }),
+          '[DONE]',
+        ]),
+      ),
+    );
+
+    const deltas = await collect(
+      createOpenAICompatibleProvider(cfg).chat({ messages: [], tools: [], model: 'm' }),
+    );
+
+    const args = deltas
+      .filter((d) => d.type === 'tool_call_args')
+      .map((d) => (d as never)['argsChunk'])
+      .join('');
+    expect(JSON.parse(args)).toEqual({ address: 'A1' });
+  });
+
   it('忽略非 JSON 的心跳行而不是崩溃', async () => {
     vi.stubGlobal(
       'fetch',
