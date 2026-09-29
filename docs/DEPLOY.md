@@ -159,6 +159,32 @@ powershell -ExecutionPolicy Bypass -File build\pack.ps1 -Gateway "https://ai.cor
 
 为把第二种情况压到最少，`manifest.xml` 已**预留了两个 Ribbon 按钮**并一次性声明了 `ReadWriteDocument` 权限。新功能尽量挂在任务窗格内部，不新增 Ribbon 按钮。
 
+### 服务器怎么更新版本（不会动到老版本的配置和用户数据）
+
+```bash
+npm run build                  # 出新的 dist/
+# 覆盖到服务器：/var/www/excel-ai/dist
+```
+
+**不用重启任何进程**，也不用停机。原因：`whitelist.txt`、`managed.json`、`feature.json`
+这三份配置**不在 `dist/` 里**——它们放在网关机器的 `server/` 目录，被 `.gitignore`
+排除，构建流程完全不碰它们。覆盖 `dist/` 在物理上不可能连带删掉或改动这几个文件。
+
+网关本身也不落用户数据（不存对话记录、不存账号状态），所以"升级会不会丢用户数据"
+这个问题在这套架构里不成立——没有状态可丢。
+
+唯一需要重启 `node server/gateway.mjs` 进程的情况：改了 `server/gateway.mjs`
+这份代码本身（网关的路由/逻辑），而不是那三个配置文件——配置文件是每次请求现读的。
+
+### 其它用户要做什么才能升级
+
+**什么都不用做**，前提是第二节的 Nginx 缓存头配对了。下次打开 Excel，
+WebView2 自动去网关拉新版 HTML/JS，无感生效。
+
+唯一例外：这次改动碰了 `manifest.xml`（增删 Ribbon 按钮、改标签、换网关地址）——
+这种情况下用户需要重新跑一次**工具箱的一键安装包**，因为按用户名生成的那份
+manifest 需要重新生成。这类改动被刻意压到最少（见上表）。
+
 ---
 
 ## 六、已知限制与排查
