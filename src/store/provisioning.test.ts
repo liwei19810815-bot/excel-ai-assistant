@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { readInjectedUser, parseConfig, parseVisibility, fetchAiConfig, provision } from './provisioning';
+import { readInjectedUser, parseConfig, fetchAiConfig, provision } from './provisioning';
 import { useSettings } from './settings';
 
 /** 造一个只会返回指定内容的 fetch */
@@ -32,7 +32,7 @@ beforeEach(() => {
     apiKey: '',
     model: '',
     enableRunScript: true,
-    provision: { mode: 'byok', user: '', visibility: 1, status: 'ready' },
+    provision: { mode: 'byok', user: '', status: 'ready' },
   });
 });
 
@@ -68,7 +68,7 @@ describe('parseConfig', () => {
   });
 
   it('byok 原样识别', () => {
-    expect(parseConfig({ mode: 'byok' })).toEqual({ mode: 'byok', visibility: 1 });
+    expect(parseConfig({ mode: 'byok' })).toEqual({ mode: 'byok' });
   });
 
   it('畸形内容返回 null 而不是抛异常', () => {
@@ -194,68 +194,6 @@ describe('provision 把结果落到 settings', () => {
 });
 
 //============================================================================
-// 可见性开关（服务端下发）
-//
-// 0 不可见 / 1 可见可使用 / 2 可见但置灰
-//============================================================================
-describe('可见性开关', () => {
-  it('只接受 0/1/2，别的一律按 1', () => {
-    expect(parseVisibility(0)).toBe(0);
-    expect(parseVisibility(1)).toBe(1);
-    expect(parseVisibility(2)).toBe(2);
-    // 【字符串 "0" 是真值】：服务端把数字写成字符串是很容易犯的错，
-    // 不校验的话会把"不可见"变成"可用"——开关方向反了，最糟的一种 bug
-    expect(parseVisibility('0')).toBe(1);
-    expect(parseVisibility(3)).toBe(1);
-    expect(parseVisibility(null)).toBe(1);
-    expect(parseVisibility(undefined)).toBe(1);
-  });
-
-  it('managed 用户的可见性被下发到 settings', async () => {
-    await provision({
-      user: 'z',
-      origin: ORIGIN,
-      fetchImpl: fakeFetch({
-        visibility: 2,
-        mode: 'managed',
-        baseUrl: 'http://llm.corp/v1',
-        model: 'q',
-      }),
-    });
-    expect(useSettings.getState().provision.visibility).toBe(2);
-  });
-
-  it('【不在白名单的人也要受可见性管控】', async () => {
-    // 可见性和白名单是两件事：白名单管"用谁的模型"，
-    // 可见性管"能不能用"。只对白名单内生效的话，
-    // 把功能关掉之后大多数人照样能用，开关等于没有。
-    await provision({
-      user: 'z',
-      origin: ORIGIN,
-      fetchImpl: fakeFetch({ visibility: 0, mode: 'byok' }),
-    });
-    const s = useSettings.getState();
-    expect(s.provision.mode).toBe('byok');
-    expect(s.provision.visibility).toBe(0);
-  });
-
-  it('网关挂掉时按"可用"处理，不是按"停用"', async () => {
-    // 这是治理开关不是安全闸。网关一抖动就让全公司用不了 AI，
-    // 代价比"多开了一会儿"大得多。真要强管控用 0 在安装侧卡死。
-    const boom = (async () => {
-      throw new Error('ECONNREFUSED');
-    }) as unknown as typeof fetch;
-    await provision({ user: 'z', origin: ORIGIN, fetchImpl: boom });
-    expect(useSettings.getState().provision.visibility).toBe(1);
-  });
-
-  it('没配可见性时默认可用', async () => {
-    await provision({ user: 'z', origin: ORIGIN, fetchImpl: fakeFetch({ mode: 'byok' }) });
-    expect(useSettings.getState().provision.visibility).toBe(1);
-  });
-});
-
-//============================================================================
 // provision 完成之前不能放行
 //
 // 【这是 Codex 评审发现的治理开关绕过】：原先界面先挂出来、
@@ -265,14 +203,14 @@ describe('可见性开关', () => {
 describe('provision 未完成期间不放行', () => {
   it('初始状态是 pending，不是"可用"', () => {
     useSettings.setState({
-      provision: { mode: 'byok', user: '', visibility: 1, status: 'pending' },
+      provision: { mode: 'byok', user: '', status: 'pending' },
     });
     expect(useSettings.getState().provision.status).toBe('pending');
   });
 
   it('provision 期间状态一直是 pending，问完才变 ready', async () => {
     useSettings.setState({
-      provision: { mode: 'byok', user: '', visibility: 1, status: 'pending' },
+      provision: { mode: 'byok', user: '', status: 'pending' },
     });
 
     // 造一个可以人工控制何时返回的 fetch
@@ -280,7 +218,7 @@ describe('provision 未完成期间不放行', () => {
     const gate = new Promise((r) => (release = r));
     const slowFetch = (async () => {
       await gate;
-      return { ok: true, status: 200, json: async () => ({ visibility: 0, mode: 'byok' }) };
+      return { ok: true, status: 200, json: async () => ({ mode: 'byok' }) };
     }) as unknown as typeof fetch;
 
     const p = provision({ user: 'z', origin: ORIGIN, fetchImpl: slowFetch });
@@ -293,12 +231,11 @@ describe('provision 未完成期间不放行', () => {
 
     const s = useSettings.getState();
     expect(s.provision.status).toBe('ready');
-    expect(s.provision.visibility).toBe(0);
   });
 
   it('网关失败也要把状态置为 ready，不能永远卡在 pending', async () => {
     useSettings.setState({
-      provision: { mode: 'byok', user: '', visibility: 1, status: 'pending' },
+      provision: { mode: 'byok', user: '', status: 'pending' },
     });
     const boom = (async () => {
       throw new Error('ECONNREFUSED');
@@ -310,7 +247,7 @@ describe('provision 未完成期间不放行', () => {
 
   it('意外异常也不能把界面卡在 pending', async () => {
     useSettings.setState({
-      provision: { mode: 'byok', user: '', visibility: 1, status: 'pending' },
+      provision: { mode: 'byok', user: '', status: 'pending' },
     });
     // 造一个连 json() 都会炸的响应，绕过 fetchAiConfig 的常规兜底
     const weird = (async () => ({

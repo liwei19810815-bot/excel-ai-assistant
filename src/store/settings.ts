@@ -82,16 +82,10 @@ export interface ProvisionState {
    */
   runScriptPinned?: boolean;
   /**
-   * 服务端下发的可见性：0 不可见 / 1 可见可使用 / 2 可见但置灰。
-   * 读不到时按 1，详见 provisioning.ts 的说明。
-   */
-  visibility: 0 | 1 | 2;
-  /**
    * 有没有问过网关。
    *
    * 【必须有这个状态】。原先界面先挂出来、provision 在后台异步跑，
-   * 默认 visibility=1 —— 那就留出了一个"开关还没生效、用户已经能聊天"
-   * 的窗口，治理开关可以被绕过（Codex 评审发现）。
+   * 配置完成前不放行，避免用户在网关配置尚未加载时使用过期状态。
    * pending 期间一律按不可用处理，问完才放行。
    */
   status: 'pending' | 'ready';
@@ -126,7 +120,7 @@ export const useSettings = create<SettingsState>()(
       systemAddition: '',
       enableRunScript: true,
       knownModels: [],
-      provision: { mode: 'byok', user: '', visibility: 1, status: 'pending' },
+      provision: { mode: 'byok', user: '', status: 'pending' },
       set: (patch) => set(patch),
       setProvision: (p) => set({ provision: p }),
       applyPreset: (id) => {

@@ -150,33 +150,6 @@ export function ChatPane() {
     );
   }
 
-  /**
-   * 服务端把 AI 功能关掉了（visibility 0 或 2）。
-   *
-   * 【这里是真正的强制点】。功能区按钮置灰只是"看起来不能用"——
-   * 而且没有共享运行时的话，按钮要等加载项跑起来之后才会变灰，
-   * 用户第一次点开之前它是正常的。所以拦截必须落在窗格里：
-   * 无论他怎么点进来，看到的都是这一页，聊天界面根本不渲染。
-   *
-   * 0 和 2 在这里的行为一样。区别在安装侧：0 会让安装程序【不注册】
-   * 这个加载项，按钮从一开始就不存在；2 保留按钮只是置灰。
-   */
-  if (settings.provision.visibility !== 1) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 bg-white p-6 text-center">
-        <div className="text-sm font-semibold text-neutral-800">AI 助手已停用</div>
-        <div className="text-xs leading-relaxed text-neutral-600">
-          此功能已被{settings.provision.managedBy || 'IT'}关闭。
-          <br />
-          如需使用，请联系 IT 运维。
-        </div>
-        <div className="mt-2 text-[11px] text-neutral-400">
-          工具箱的其它功能不受影响，可以正常使用。
-        </div>
-      </div>
-    );
-  }
-
   if (showSettings) return <SettingsPage onClose={() => setShowSettings(false)} />;
 
   return (

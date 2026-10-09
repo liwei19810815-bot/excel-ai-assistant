@@ -166,7 +166,7 @@ npm run build                  # 出新的 dist/
 # 覆盖到服务器：/var/www/excel-ai/dist
 ```
 
-**不用重启任何进程**，也不用停机。原因：`whitelist.txt`、`managed.json`、`feature.json`
+**不用重启任何进程**，也不用停机。原因：`whitelist.txt`、`managed.json`
 这三份配置**不在 `dist/` 里**——它们放在网关机器的 `server/` 目录，被 `.gitignore`
 排除，构建流程完全不碰它们。覆盖 `dist/` 在物理上不可能连带删掉或改动这几个文件。
 

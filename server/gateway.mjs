@@ -32,7 +32,6 @@ const PORT = Number(process.env.PORT ?? 8080);
 const STATIC_DIR = resolve(process.env.STATIC_DIR ?? 'dist');
 const WHITELIST_FILE = resolve(process.env.WHITELIST_FILE ?? 'server/whitelist.txt');
 const MANAGED_FILE = resolve(process.env.MANAGED_FILE ?? 'server/managed.json');
-const FEATURE_FILE = resolve(process.env.FEATURE_FILE ?? 'server/feature.json');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -76,41 +75,6 @@ function loadManagedConfig() {
   }
 }
 
-/**
- * 功能可见性开关。和白名单是两件事：
- *   白名单  = 这个人用【公司配好的模型】还是自己配
- *   可见性  = 这个人【能不能看到、能不能用】AI 功能
- * 所以对不在白名单的人也要返回可见性。
- *
- *   0 不可见     —— 安装时就不注册这个加载项（唯一能真正"看不见"的办法）
- *   1 可见可使用 —— 默认
- *   2 可见但置灰 —— 按钮在，点开告诉用户已停用
- *
- * 读不出配置时【默认 1】：这是个治理开关，不是安全闸。
- * 配置文件坏掉就让所有人用不了 AI，代价比误开大得多。
- */
-function loadVisibility(user) {
-  if (!existsSync(FEATURE_FILE)) return 1;
-  try {
-    const f = JSON.parse(readFileSync(FEATURE_FILE, 'utf8'));
-
-    // 先看有没有针对这个人的单独设置
-    const ov = f.visibilityOverrides;
-    if (ov && typeof ov === 'object' && user) {
-      const hit = Object.keys(ov).find((k) => k.toLowerCase() === user.toLowerCase());
-      if (hit && isVisibility(ov[hit])) return ov[hit];
-    }
-
-    return isVisibility(f.visibility) ? f.visibility : 1;
-  } catch {
-    return 1;
-  }
-}
-
-function isVisibility(v) {
-  return v === 0 || v === 1 || v === 2;
-}
-
 function sendJson(res, status, body) {
   const s = JSON.stringify(body);
   res.writeHead(status, {
@@ -123,14 +87,13 @@ function sendJson(res, status, body) {
 
 function handleAiConfig(url, res) {
   const user = (url.searchParams.get('u') ?? '').trim();
-  const visibility = loadVisibility(user);
 
   // 没带身份 = 不认识 = 自己配。不要报错，任务窗格会安静退回 byok。
-  if (!user) return sendJson(res, 200, { visibility, mode: 'byok' });
+  if (!user) return sendJson(res, 200, { mode: 'byok' });
 
   const list = loadWhitelist();
   if (!list.includes(user.toLowerCase())) {
-    return sendJson(res, 200, { visibility, mode: 'byok' });
+    return sendJson(res, 200, { mode: 'byok' });
   }
 
   const managed = loadManagedConfig();
@@ -139,11 +102,10 @@ function handleAiConfig(url, res) {
     // 【不要假装 managed】：回 byok 让用户自己配，至少他能用；
     // 同时在服务端日志里喊出来，免得没人发现。
     console.error(`[ai-config] ${user} 在白名单里，但 ${MANAGED_FILE} 缺失或无效`);
-    return sendJson(res, 200, { visibility, mode: 'byok' });
+    return sendJson(res, 200, { mode: 'byok' });
   }
 
   sendJson(res, 200, {
-    visibility,
     mode: 'managed',
     baseUrl: managed.baseUrl,
     model: managed.model,
@@ -210,8 +172,6 @@ server.listen(PORT, () => {
   console.log(`  静态目录：${STATIC_DIR}`);
   console.log(`  白名单　：${WHITELIST_FILE}（${loadWhitelist().length} 个账号）`);
   console.log(`  下发配置：${MANAGED_FILE}（${loadManagedConfig() ? '已就绪' : '缺失'}）`);
-  const v = loadVisibility('');
-  console.log(`  可见性　：${v}（${['不可见', '可见可使用', '可见但置灰'][v]}）`);
   console.log('');
   console.log('生产部署请放在 nginx 后面由它终止 https，见 server/nginx.conf.sample');
 });

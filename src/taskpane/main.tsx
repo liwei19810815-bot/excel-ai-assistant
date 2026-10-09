@@ -21,11 +21,7 @@ function mount() {
   );
 
   /**
-   * 白名单分流 + 可见性：问一次网关，再按结果把功能区按钮置灰。
-   *
-   * 【链路本身在 startup.ts 里，这里只负责调】。抽出去是为了能测——
-   * main.tsx 要 DOM、要 import 样式，在测试环境里跑不起来，
-   * 接线写在这儿就等于没有测试覆盖。
+   * 白名单分流：问一次网关，把托管模型配置装进内存。
    *
    * 【不 await，但界面不会提前放行】：挂载和问配置并行，
    * 可 provision.status 初始是 pending，ChatPane 在 pending 期间
