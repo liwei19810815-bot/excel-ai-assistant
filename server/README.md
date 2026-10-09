@@ -14,7 +14,7 @@ npm run build          # 先出 dist/
 node server/gateway.mjs
 ```
 
-三个配置文件**不在版本库里**（里面会有内网地址、可能有 API Key），
+两个配置文件**不在版本库里**（里面会有内网地址、可能有 API Key），
 仓库里只保留 `.example` 模板。
 
 ## 配置文件
