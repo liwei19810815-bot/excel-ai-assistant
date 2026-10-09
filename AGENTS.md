@@ -1,4 +1,4 @@
-# Codex 与 Codex 自动协作
+# Claude 与 Codex 自动协作
 
 本仓库的 Codex 复审协议在 [docs/AI协作公共方案.md](docs/AI协作公共方案.md) 和 [review/README.md](review/README.md)。
 
